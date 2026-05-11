@@ -720,6 +720,8 @@ function createCard(opts = {}) {
     notes: opts.notes || '',
     videoSrc: opts.videoSrc || '',
     videoType: opts.videoType || '',
+    _videoBlob: opts._videoBlob || null,
+    _videoBlobType: opts._videoBlobType || '',
     areas: opts.areas || getDefaultAreas(),
   };
 }
@@ -759,8 +761,14 @@ async function saveToDB() {
 
   for (const card of data) {
     const blobs = {};
-    if (card.videoSrc && card.videoSrc.startsWith('data:')) {
-      blobs._video = card.videoSrc;
+    // Store video as raw Blob (not data URL) for cross-browser compatibility
+    if (card._videoBlob) {
+      blobs._videoBlob = card._videoBlob;
+      blobs._videoBlobType = card._videoBlobType || 'video/mp4';
+    } else if (card.videoSrc && card.videoSrc.startsWith('data:')) {
+      // Legacy: convert data URL to Blob for storage
+      var b = dataURLtoBlob(card.videoSrc);
+      if (b) { blobs._videoBlob = b; blobs._videoBlobType = b.type || 'video/mp4'; }
     }
     for (const [areaName, areaData] of Object.entries(card.areas)) {
       areaData.images.forEach((src, i) => {
@@ -782,14 +790,45 @@ async function loadFromDB() {
   data = [];
   for (const m of meta) {
     const blobs = await dbGet('blob_' + m.id) || {};
+    var videoSrc = '';
+    var videoType = '';
+    var videoBlob = null;
+    var videoBlobType = '';
+
+    if (m.videoType === 'url') {
+      videoSrc = m.videoSrc;
+      videoType = 'url';
+    } else if (blobs._videoBlob) {
+      // New format: raw Blob stored in IndexedDB
+      videoBlob = blobs._videoBlob;
+      videoBlobType = blobs._videoBlobType || 'video/mp4';
+      videoSrc = URL.createObjectURL(videoBlob);
+      videoType = 'blob';
+    } else if (blobs._video) {
+      // Legacy: data URL stored, convert to Blob for cross-browser playback
+      var blob = dataURLtoBlob(blobs._video);
+      if (blob) {
+        videoBlob = blob;
+        videoBlobType = blob.type || 'video/mp4';
+        videoSrc = URL.createObjectURL(blob);
+        videoType = 'blob';
+      } else {
+        videoSrc = blobs._video;
+        videoType = 'blob';
+      }
+    }
+
     const card = createCard({
       id: m.id, name: m.name, price: m.price,
       location: m.location, roomType: m.roomType,
       link: m.link, notes: m.notes,
-      videoSrc: m.videoType === 'url' ? m.videoSrc : (blobs._video || ''),
-      videoType: m.videoType || (blobs._video ? 'blob' : ''),
+      videoSrc: videoSrc,
+      videoType: videoType,
       areas: {}
     });
+    card._videoBlob = videoBlob;
+    card._videoBlobType = videoBlobType;
+
     for (const [areaName, areaData] of Object.entries(m.areas)) {
       card.areas[areaName] = {
         images: areaData.images.map((s, i) => {
@@ -806,6 +845,33 @@ async function loadFromDB() {
     data.push(card);
   }
   return true;
+}
+
+// ========== Blob Helpers ==========
+function dataURLtoBlob(dataURL) {
+  try {
+    var parts = dataURL.split(',');
+    var mime = parts[0].match(/:(.*?);/)[1] || 'video/mp4';
+    var raw = atob(parts[1]);
+    var arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  } catch (e) { return null; }
+}
+
+function blobToDataURL(blob) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(reader.result); };
+    reader.onerror = function() { reject(reader.error); };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function revokeVideoBlobURL(card) {
+  if (card.videoType === 'blob' && card.videoSrc && card.videoSrc.startsWith('blob:')) {
+    URL.revokeObjectURL(card.videoSrc);
+  }
 }
 
 function showSaveStatus() {
@@ -993,6 +1059,7 @@ function editCard(ci) {
 function removeCard(ci) {
   if (!confirm(t('confirmDelete')(data[ci].name))) return;
   const id = data[ci].id;
+  revokeVideoBlobURL(data[ci]);
   data.splice(ci, 1);
   dbDelete('blob_' + id);
   render();
@@ -1091,25 +1158,22 @@ function pickVideo(ci) {
 function handleVideo(e, ci) {
   const file = e.target.files[0];
   if (!file) return;
-  // Warn if file is very large (data URL limit ~50MB for most browsers)
-  if (file.size > 50 * 1024 * 1024) {
-    showToast(lang === 'en' ? 'Video too large (>50MB). Use link instead.' : '视频文件过大(>50MB)，建议使用链接方式添加。', 'error');
+  // Warn if file is very large
+  if (file.size > 500 * 1024 * 1024) {
+    showToast(lang === 'en' ? 'Video too large (>500MB)' : '视频文件过大(>500MB)', 'error');
     e.target.value = '';
     return;
   }
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    data[ci].videoSrc = ev.target.result;
-    data[ci].videoType = 'blob';
-    render();
-    expandCard(ci);
-    scheduleAutoSave();
-    showToast(t('toastVideoUpload'), 'success');
-  };
-  reader.onerror = function() {
-    showToast(lang === 'en' ? 'Video upload failed' : '视频上传失败', 'error');
-  };
-  reader.readAsDataURL(file);
+  // Store as Blob + Blob URL (works across all browsers)
+  revokeVideoBlobURL(data[ci]);
+  data[ci]._videoBlob = file;
+  data[ci]._videoBlobType = file.type || 'video/mp4';
+  data[ci].videoSrc = URL.createObjectURL(file);
+  data[ci].videoType = 'blob';
+  render();
+  expandCard(ci);
+  scheduleAutoSave();
+  showToast(t('toastVideoUpload'), 'success');
   e.target.value = '';
 }
 
@@ -1133,8 +1197,11 @@ function setVideoUrl(ci) {
 }
 
 function removeVideo(ci) {
+  revokeVideoBlobURL(data[ci]);
   data[ci].videoSrc = '';
   data[ci].videoType = '';
+  data[ci]._videoBlob = null;
+  data[ci]._videoBlobType = '';
   render();
   expandCard(ci);
   scheduleAutoSave();
@@ -1161,6 +1228,7 @@ async function exportShare() {
 
   await new Promise(r => setTimeout(r, 100));
 
+  // Convert Blob URLs to data URLs for embedding in exported HTML
   const totalCards = data.length;
   let processed = 0;
 
@@ -1168,7 +1236,17 @@ async function exportShare() {
     processed++;
     pText.textContent = `${t('saveProcessing')} (${processed}/${totalCards})`;
     fill.style.width = `${(processed / (totalCards + 1)) * 80}%`;
-    await new Promise(r => setTimeout(r, 50));
+
+    // Convert video Blob to data URL for export
+    if (card._videoBlob && card.videoType === 'blob') {
+      try {
+        card.videoSrc = await blobToDataURL(card._videoBlob);
+      } catch (e) {
+        card.videoSrc = '';
+      }
+    }
+
+    await new Promise(r => setTimeout(r, 50)); // yield to UI
   }
 
   pText.textContent = t('saveWriting');
@@ -1185,10 +1263,16 @@ async function exportShare() {
   a.download = `house-compare_${new Date().toISOString().slice(0,10)}.html`;
   a.click();
 
+  // Restore Blob URLs after export (data URLs were temporarily set for export)
+  for (const card of data) {
+    if (card._videoBlob && card.videoType === 'blob') {
+      card.videoSrc = URL.createObjectURL(card._videoBlob);
+    }
+  }
+
   setTimeout(() => {
     overlay.classList.remove('show');
     showToast(t('toastExportDone'), 'success');
-    // Show share result modal
     document.getElementById('shareResultModal').classList.add('show');
   }, 800);
 }
@@ -1402,6 +1486,19 @@ function handleLoadFile(e) {
         if (!card.videoSrc) card.videoSrc = '';
         if (!card.videoType) card.videoType = card.videoSrc ? 'url' : '';
         if (!card.areas) card.areas = getDefaultAreas();
+        // Convert data URL videos to Blob for cross-browser playback
+        if (card.videoSrc && card.videoSrc.startsWith('data:')) {
+          var blob = dataURLtoBlob(card.videoSrc);
+          if (blob) {
+            card._videoBlob = blob;
+            card._videoBlobType = blob.type;
+            card.videoSrc = URL.createObjectURL(blob);
+            card.videoType = 'blob';
+          }
+        } else {
+          card._videoBlob = null;
+          card._videoBlobType = '';
+        }
         return card;
       });
       render();
@@ -1417,6 +1514,7 @@ function handleLoadFile(e) {
 
 function clearAll() {
   if (!confirm(t('confirmClear'))) return;
+  data.forEach(function(c) { revokeVideoBlobURL(c); });
   data = [];
   render();
   saveToDB();
