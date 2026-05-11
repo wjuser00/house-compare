@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>选房对比 / House Compare</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --text2: #666;
+    --border: #e8e8e3;
+    --accent: #2d2d2d;
+    --accent-light: #f0efe9;
+    --tag: #e8e7e0;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 40px rgba(0,0,0,0.08);
+    --success: #2d8a4e;
+    --danger: #c0392b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Noto Sans SC", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header { text-align: center; padding: 48px 24px 24px; }
+  .header h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .header p { color: var(--text2); font-size: 14px; }
+
+  /* Language Toggle */
+  .lang-toggle {
+    position: fixed; top: 16px; right: 16px; z-index: 200;
+    display: flex; gap: 0; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--card);
+    box-shadow: var(--shadow);
+  }
+  .lang-toggle button {
+    padding: 6px 14px; font-size: 13px; border: none; cursor: pointer;
+    background: transparent; color: var(--text2); transition: all 0.15s;
+  }
+  .lang-toggle button.active { background: var(--accent); color: #fff; }
+
+  /* Save Status */
+  .save-status {
+    position: fixed; top: 16px; left: 16px; z-index: 200;
+    padding: 6px 14px; border-radius: 8px; font-size: 12px;
+    background: var(--card); border: 1px solid var(--border);
+    box-shadow: var(--shadow); color: var(--text2);
+    transition: all 0.3s; opacity: 0; transform: translateY(-8px);
+  }
+  .save-status.show { opacity: 1; transform: translateY(0); }
+  .save-status.saved { color: var(--success); border-color: var(--success); }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; justify-content: center; gap: 8px;
+    padding: 0 24px 28px; flex-wrap: wrap;
+  }
+  .toolbar button {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 8px 16px; border-radius: 8px; font-size: 13px;
+    color: var(--text); cursor: pointer; transition: all 0.15s;
+  }
+  .toolbar button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .toolbar button.primary-btn { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .toolbar button.primary-btn:hover { opacity: 0.85; }
+  .toolbar button.danger-btn { color: var(--danger); border-color: var(--danger); }
+  .toolbar button.danger-btn:hover { background: var(--danger); color: #fff; }
+
+  /* Grid */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px; padding: 0 24px 60px; max-width: 1400px; margin: 0 auto;
+  }
+
+  /* Card */
+  .card {
+    background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--border); overflow: hidden;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+  .card-header {
+    padding: 24px 24px 16px; display: flex;
+    justify-content: space-between; align-items: flex-start;
+  }
+  .card-header h2 { font-size: 18px; font-weight: 600; line-height: 1.3; }
+  .card-header .price {
+    font-size: 18px; font-weight: 600; color: var(--accent);
+    white-space: nowrap; margin-left: 12px;
+  }
+  .card-meta { padding: 0 24px 16px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--tag); color: var(--text2);
+    padding: 4px 10px; border-radius: 6px; font-size: 12px;
+  }
+  .card-notes { padding: 0 24px 12px; color: var(--text2); font-size: 13px; line-height: 1.5; }
+  .card-link { padding: 0 24px 16px; }
+  .card-link a {
+    color: var(--accent); font-size: 13px; text-decoration: none;
+    border-bottom: 1px solid var(--border); padding-bottom: 1px;
+  }
+  .card-link a:hover { border-color: var(--accent); }
+
+  /* Card Actions */
+  .card-actions { padding: 0 24px 8px; display: flex; gap: 6px; }
+  .card-actions button {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+    color: var(--text2); transition: all 0.15s;
+  }
+  .card-actions button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Expand */
+  .expand-btn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; width: 100%; padding: 12px; background: none;
+    border: none; border-top: 1px solid var(--border);
+    color: var(--text2); font-size: 13px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .expand-btn:hover { background: var(--accent-light); }
+  .expand-btn .arrow { display: inline-block; transition: transform 0.25s; font-size: 11px; }
+  .expand-btn.open .arrow { transform: rotate(180deg); }
+  .card-detail { display: none; border-top: 1px solid var(--border); }
+  .card-detail.show { display: block; }
+
+  /* Area Section */
+  .area-section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  .area-section:last-child { border-bottom: none; }
+  .area-section h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .area-images {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px; margin-bottom: 10px;
+  }
+  .area-images .img-slot {
+    aspect-ratio: 4/3; border-radius: 8px; overflow: hidden;
+    position: relative; background: var(--accent-light);
+    border: 1px dashed var(--border); cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .area-images .img-slot:hover { border-color: var(--text2); }
+  .area-images .img-slot img { width: 100%; height: 100%; object-fit: cover; }
+  .area-images .img-slot .add-icon {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    color: var(--text2); font-size: 24px; font-weight: 300;
+  }
+  .area-images .img-slot.has-img .add-icon { display: none; }
+  .area-images .img-slot .remove-btn {
+    display: none; position: absolute; top: 4px; right: 4px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(0,0,0,0.5); color: #fff; border: none;
+    font-size: 12px; cursor: pointer; align-items: center;
+    justify-content: center; line-height: 1;
+  }
+  .area-images .img-slot.has-img:hover .remove-btn { display: flex; }
+  .area-desc {
+    width: 100%; min-height: 36px; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 13px;
+    font-family: inherit; resize: vertical; color: var(--text);
+    background: transparent; line-height: 1.5;
+  }
+  .area-desc:focus { outline: none; border-color: var(--accent); }
+
+  /* Add Area */
+  .add-area-btn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px; width: 100%; padding: 14px; background: none;
+    border: none; border-top: 1px solid var(--border);
+    color: var(--text2); font-size: 13px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .add-area-btn:hover { background: var(--accent-light); }
+
+  /* Video */
+  .video-section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  .video-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .video-wrapper {
+    position: relative; border-radius: 8px; overflow: hidden;
+    background: var(--accent-light); border: 1px dashed var(--border);
+    min-height: 120px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; transition: border-color 0.15s;
+  }
+  .video-wrapper:hover { border-color: var(--text2); }
+  .video-wrapper video { width: 100%; border-radius: 8px; display: block; }
+  .video-wrapper .video-placeholder { text-align: center; color: var(--text2); padding: 24px; }
+  .video-placeholder .v-icon { font-size: 28px; margin-bottom: 6px; }
+  .video-placeholder p { font-size: 13px; }
+  .video-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .video-actions button {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer;
+    color: var(--text2); transition: all 0.15s;
+  }
+  .video-actions button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .video-url-input { display: none; margin-top: 8px; }
+  .video-url-input.show { display: flex; gap: 6px; }
+  .video-url-input input {
+    flex: 1; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-family: inherit;
+    color: var(--text); background: transparent;
+  }
+  .video-url-input input:focus { outline: none; border-color: var(--accent); }
+  .video-url-input button {
+    padding: 6px 14px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--accent); color: #fff;
+    font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 100;
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--card); border-radius: var(--radius);
+    padding: 28px; width: 100%; max-width: 480px;
+    box-shadow: var(--shadow-lg); max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+  .modal label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; margin-top: 12px; }
+  .modal label:first-of-type { margin-top: 0; }
+  .modal input, .modal textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 14px; font-family: inherit;
+    color: var(--text); background: transparent;
+  }
+  .modal input:focus, .modal textarea:focus { outline: none; border-color: var(--accent); }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .modal-actions button {
+    padding: 8px 20px; border-radius: 6px; font-size: 14px;
+    cursor: pointer; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); transition: all 0.15s;
+  }
+  .modal-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .modal-actions button:hover { opacity: 0.85; }
+
+  /* Progress bar for export */
+  .progress-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 300;
+    align-items: center; justify-content: center;
+  }
+  .progress-overlay.show { display: flex; }
+  .progress-box {
+    background: var(--card); border-radius: var(--radius);
+    padding: 32px; min-width: 320px; text-align: center;
+    box-shadow: var(--shadow-lg);
+  }
+  .progress-box h3 { margin-bottom: 16px; font-size: 16px; }
+  .progress-bar {
+    height: 6px; background: var(--border); border-radius: 3px;
+    overflow: hidden; margin-bottom: 12px;
+  }
+  .progress-bar .fill {
+    height: 100%; background: var(--accent); border-radius: 3px;
+    transition: width 0.3s; width: 0%;
+  }
+  .progress-box p { font-size: 13px; color: var(--text2); }
+
+  .hidden-input { display: none; }
+
+  /* View mode (read-only) */
+  body.view-mode .toolbar,
+  body.view-mode .card-actions,
+  body.view-mode .expand-btn + .card-detail .add-area-btn,
+  body.view-mode .video-actions,
+  body.view-mode .area-images .img-slot:not(.has-img),
+  body.view-mode .area-images .img-slot .remove-btn,
+  body.view-mode .save-status,
+  body.view-mode .lang-toggle { display: none !important; }
+  body.view-mode .area-desc { pointer-events: none; border-color: transparent; padding: 8px 0; }
+  body.view-mode .card { cursor: default; }
+  body.view-mode .card:hover { transform: none; box-shadow: var(--shadow); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    .header { padding: 40px 20px 20px; }
+    .header h1 { font-size: 22px; }
+    .grid { padding: 0 16px 40px; }
+    .area-images { grid-template-columns: repeat(3, 1fr); }
+    .lang-toggle { top: 12px; right: 12px; }
+    .save-status { top: 12px; left: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="save-status" id="saveStatus">
+  <span id="saveStatusText"></span>
+</div>
+
+<div class="lang-toggle">
+  <button id="langZh" onclick="setLang('zh')" class="active">中文</button>
+  <button id="langEn" onclick="setLang('en')">EN</button>
+</div>
+
+<div class="header">
+  <h1 id="t_title">🏠 选房对比</h1>
+  <p id="t_subtitle">点击展开查看各区域详情 · 图片/视频点击添加 · 自动保存</p>
+</div>
+
+<div class="toolbar">
+  <button onclick="addCard()" id="t_addOption">＋ 添加选项</button>
+  <button onclick="expandAll()" id="t_expandAll">全部展开</button>
+  <button onclick="collapseAll()" id="t_collapseAll">全部收起</button>
+  <button onclick="exportShare()" class="primary-btn" id="t_exportShare">🔗 导出可分享页面</button>
+  <button onclick="exportJSON()" id="t_exportJSON">💾 导出JSON</button>
+  <button onclick="importJSON()" id="t_importJSON">📂 导入JSON</button>
+  <button onclick="clearAll()" class="danger-btn" id="t_clearAll">🗑️ 清空全部</button>
+  <input type="file" id="loadFile" class="hidden-input" accept=".json" onchange="handleLoadFile(event)">
+</div>
+
+<div class="grid" id="grid"></div>
+
+<!-- Add Card Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h3 id="t_modalAddTitle">添加新选项</h3>
+    <label id="t_labelName">名称 *</label>
+    <input id="m_name" placeholder="如：海景民宿A / e.g. Seaside Villa A">
+    <label id="t_labelPrice">价格</label>
+    <input id="m_price" placeholder="如：¥388/晚 / ¥388/night">
+    <label id="t_labelLocation">位置</label>
+    <input id="m_location" placeholder="如：三亚湾 / Sanya Bay">
+    <label id="t_labelRoomType">房型</label>
+    <input id="m_roomType" placeholder="如：三室一厅 · 可住6人 / 3BR · 6 guests">
+    <label id="t_labelLink">平台链接</label>
+    <input id="m_link" placeholder="https://...">
+    <label id="t_labelNotes">备注</label>
+    <textarea id="m_notes" placeholder="补充说明... / Notes..."></textarea>
+    <div class="modal-actions">
+      <button onclick="closeModal()" id="t_btnCancel">取消</button>
+      <button class="primary" onclick="confirmAdd()" id="t_btnAdd">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Area Name Modal -->
+<div class="modal-overlay" id="areaModal">
+  <div class="modal">
+    <h3 id="t_modalAreaTitle">添加区域</h3>
+    <label id="t_labelAreaName">区域名称</label>
+    <input id="area_name" placeholder="如：阳台、车库 / Balcony, Garage...">
+    <div class="modal-actions">
+      <button onclick="closeAreaModal()" id="t_btnAreaCancel">取消</button>
+      <button class="primary" onclick="confirmArea()" id="t_btnAreaAdd">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Progress Overlay -->
+<div class="progress-overlay" id="progressOverlay">
+  <div class="progress-box">
+    <h3 id="t_exporting">正在导出...</h3>
+    <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+    <p id="progressText">准备中...</p>
+  </div>
+</div>
+
+<script>
+// ========== i18n ==========
+const I18N = {
+  zh: {
+    title: '🏠 选房对比',
+    subtitle: '点击展开查看各区域详情 · 图片/视频点击添加 · 自动保存',
+    addOption: '＋ 添加选项',
+    expandAll: '全部展开',
+    collapseAll: '全部收起',
+    exportShare: '🔗 导出可分享页面',
+    exportJSON: '💾 导出JSON',
+    importJSON: '📂 导入JSON',
+    clearAll: '🗑️ 清空全部',
+    modalAddTitle: '添加新选项',
+    labelName: '名称 *',
+    labelPrice: '价格',
+    labelLocation: '位置',
+    labelRoomType: '房型',
+    labelLink: '平台链接',
+    labelNotes: '备注',
+    btnCancel: '取消',
+    btnAdd: '添加',
+    btnSave: '保存',
+    modalAreaTitle: '添加区域',
+    labelAreaName: '区域名称',
+    btnAreaCancel: '取消',
+    btnAreaAdd: '添加',
+    exporting: '正在导出...',
+    confirmDelete: name => `确定删除「${name}」？`,
+    confirmDeleteArea: name => `确定删除「${name}」区域？`,
+    confirmClear: '确定清空所有数据？此操作不可撤销。',
+    enterName: '请输入名称',
+    enterAreaName: '请输入区域名称',
+    areaExists: '该区域已存在',
+    fileError: '文件格式错误',
+    expandDetail: '区域详情',
+    videoIntro: '🎬 视频介绍',
+    uploadVideo: '📁 上传视频',
+    addLink: '🔗 添加链接',
+    remove: '🗑️ 移除',
+    clickUpload: '点击上传视频或添加链接',
+    videoLinkPlaceholder: '粘贴视频链接 (mp4/webm/在线链接)',
+    areaDescPlaceholder: name => `添加${name}描述...`,
+    addArea: '＋ 添加区域',
+    deleteArea: '删除区域',
+    viewLink: '🔗 查看链接',
+    edit: '✏️ 编辑',
+    delete: '🗑️ 删除',
+    saved: '已保存 ✓',
+    savePreparing: '准备导出...',
+    saveProcessing: '处理媒体文件...',
+    saveWriting: '生成HTML...',
+    saveDone: '导出完成！',
+    shareTitle: '🏠 选房对比 - 查看模式',
+    deleteCard: '🗑️ 删除',
+    tagLocation: '📍',
+    tagRoom: '🛏️',
+  },
+  en: {
+    title: '🏠 House Compare',
+    subtitle: 'Click to expand details · Add images/videos · Auto-saved',
+    addOption: '＋ Add Option',
+    expandAll: 'Expand All',
+    collapseAll: 'Collapse All',
+    exportShare: '🔗 Export Shareable Page',
+    exportJSON: '💾 Export JSON',
+    importJSON: '📂 Import JSON',
+    clearAll: '🗑️ Clear All',
+    modalAddTitle: 'Add New Option',
+    labelName: 'Name *',
+    labelPrice: 'Price',
+    labelLocation: 'Location',
+    labelRoomType: 'Room Type',
+    labelLink: 'Platform Link',
+    labelNotes: 'Notes',
+    btnCancel: 'Cancel',
+    btnAdd: 'Add',
+    btnSave: 'Save',
+    modalAreaTitle: 'Add Area',
+    labelAreaName: 'Area Name',
+    btnAreaCancel: 'Cancel',
+    btnAreaAdd: 'Add',
+    exporting: 'Exporting...',
+    confirmDelete: name => `Delete "${name}"?`,
+    confirmDeleteArea: name => `Delete area "${name}"?`,
+    confirmClear: 'Clear all data? This cannot be undone.',
+    enterName: 'Please enter a name',
+    enterAreaName: 'Please enter an area name',
+    areaExists: 'Area already exists',
+    fileError: 'Invalid file format',
+    expandDetail: 'Details',
+    videoIntro: '🎬 Video Tour',
+    uploadVideo: '📁 Upload Video',
+    addLink: '🔗 Add Link',
+    remove: '🗑️ Remove',
+    clickUpload: 'Click to upload video or add link',
+    videoLinkPlaceholder: 'Paste video link (mp4/webm/online)',
+    areaDescPlaceholder: name => `Add ${name} description...`,
+    addArea: '＋ Add Area',
+    deleteArea: 'Delete',
+    viewLink: '🔗 View Link',
+    edit: '✏️ Edit',
+    delete: '🗑️ Delete',
+    saved: 'Saved ✓',
+    savePreparing: 'Preparing...',
+    saveProcessing: 'Processing media...',
+    saveWriting: 'Generating HTML...',
+    saveDone: 'Done!',
+    shareTitle: '🏠 House Compare - View Mode',
+    deleteCard: '🗑️ Delete',
+    tagLocation: '📍',
+    tagRoom: '🛏️',
+  }
+};
+
+let lang = localStorage.getItem('hc_lang') || 'zh';
+function t(key) { return I18N[lang][key] || key; }
+
+function setLang(l) {
+  lang = l;
+  localStorage.setItem('hc_lang', l);
+  document.getElementById('langZh').classList.toggle('active', l === 'zh');
+  document.getElementById('langEn').classList.toggle('active', l === 'en');
+  applyLang();
+  render();
+}
+
+function applyLang() {
+  document.getElementById('t_title').textContent = t('title');
+  document.getElementById('t_subtitle').textContent = t('subtitle');
+  document.getElementById('t_addOption').textContent = t('addOption');
+  document.getElementById('t_expandAll').textContent = t('expandAll');
+  document.getElementById('t_collapseAll').textContent = t('collapseAll');
+  document.getElementById('t_exportShare').textContent = t('exportShare');
+  document.getElementById('t_exportJSON').textContent = t('exportJSON');
+  document.getElementById('t_importJSON').textContent = t('importJSON');
+  document.getElementById('t_clearAll').textContent = t('clearAll');
+  document.getElementById('t_modalAddTitle').textContent = t('modalAddTitle');
+  document.getElementById('t_labelName').textContent = t('labelName');
+  document.getElementById('t_labelPrice').textContent = t('labelPrice');
+  document.getElementById('t_labelLocation').textContent = t('labelLocation');
+  document.getElementById('t_labelRoomType').textContent = t('labelRoomType');
+  document.getElementById('t_labelLink').textContent = t('labelLink');
+  document.getElementById('t_labelNotes').textContent = t('labelNotes');
+  document.getElementById('t_btnCancel').textContent = t('btnCancel');
+  document.getElementById('t_btnAdd').textContent = t('btnAdd');
+  document.getElementById('t_modalAreaTitle').textContent = t('modalAreaTitle');
+  document.getElementById('t_labelAreaName').textContent = t('labelAreaName');
+  document.getElementById('t_btnAreaCancel').textContent = t('btnAreaCancel');
+  document.getElementById('t_btnAreaAdd').textContent = t('btnAreaAdd');
+  document.getElementById('t_exporting').textContent = t('exporting');
+  document.title = lang === 'en' ? 'House Compare' : '选房对比';
+}
+
+// ========== IndexedDB ==========
+const DB_NAME = 'HouseCompareDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'data';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function dbPut(key, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e.target.error);
+  });
+}
+
+async function dbGet(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function dbDelete(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e.target.error);
+  });
+}
+
+// ========== Data Model ==========
+const DEFAULT_AREAS_ZH = ['卧室', '客厅', '厨房', '卫生间', '阳台', '交通', '周边'];
+const DEFAULT_AREAS_EN = ['Bedroom', 'Living Room', 'Kitchen', 'Bathroom', 'Balcony', 'Transport', 'Surroundings'];
+
+function getDefaultAreas() {
+  const keys = lang === 'en' ? DEFAULT_AREAS_EN : DEFAULT_AREAS_ZH;
+  const areas = {};
+  keys.forEach(k => { areas[k] = { images: [], desc: '' }; });
+  return areas;
+}
+
+let data = [];
+let currentCardIdx = null;
+let currentAreaKey = null;
+let autoSaveTimer = null;
+
+function genId() { return '_' + Math.random().toString(36).slice(2, 9); }
+
+function createCard(opts = {}) {
+  return {
+    id: opts.id || genId(),
+    name: opts.name || (lang === 'en' ? 'New Option' : '新选项'),
+    price: opts.price || '',
+    location: opts.location || '',
+    roomType: opts.roomType || '',
+    link: opts.link || '',
+    notes: opts.notes || '',
+    videoSrc: opts.videoSrc || '',
+    videoType: opts.videoType || '', // 'url' | 'blob'
+    areas: opts.areas || getDefaultAreas(),
+  };
+}
+
+// ========== Auto Save ==========
+function scheduleAutoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(async () => {
+    await saveToDB();
+    showSaveStatus();
+  }, 800);
+}
+
+async function saveToDB() {
+  // Save metadata (without large blobs) and large blobs separately
+  const meta = data.map(card => ({
+    id: card.id,
+    name: card.name,
+    price: card.price,
+    location: card.location,
+    roomType: card.roomType,
+    link: card.link,
+    notes: card.notes,
+    videoSrc: card.videoType === 'url' ? card.videoSrc : '',
+    videoType: card.videoType === 'url' ? 'url' : '',
+    areas: (() => {
+      const a = {};
+      for (const [k, v] of Object.entries(card.areas)) {
+        a[k] = {
+          images: v.images.map(s => s.startsWith('data:') ? '__BLOB__' : s),
+          desc: v.desc
+        };
+      }
+      return a;
+    })()
+  }));
+  await dbPut('meta', meta);
+
+  // Save each card's blobs
+  for (const card of data) {
+    const blobs = {};
+    if (card.videoSrc && card.videoSrc.startsWith('data:')) {
+      blobs._video = card.videoSrc;
+    }
+    for (const [areaName, areaData] of Object.entries(card.areas)) {
+      areaData.images.forEach((src, i) => {
+        if (src.startsWith('data:')) {
+          blobs[`${areaName}_${i}`] = src;
+        }
+      });
+    }
+    if (Object.keys(blobs).length > 0) {
+      await dbPut('blob_' + card.id, blobs);
+    }
+  }
+}
+
+async function loadFromDB() {
+  const meta = await dbGet('meta');
+  if (!meta || !Array.isArray(meta) || meta.length === 0) return false;
+
+  data = [];
+  for (const m of meta) {
+    const blobs = await dbGet('blob_' + m.id) || {};
+    const card = createCard({
+      id: m.id, name: m.name, price: m.price,
+      location: m.location, roomType: m.roomType,
+      link: m.link, notes: m.notes,
+      videoSrc: m.videoType === 'url' ? m.videoSrc : (blobs._video || ''),
+      videoType: m.videoType || (blobs._video ? 'blob' : ''),
+      areas: {}
+    });
+    for (const [areaName, areaData] of Object.entries(m.areas)) {
+      card.areas[areaName] = {
+        images: areaData.images.map((s, i) => {
+          if (s === '__BLOB__') return blobs[`${areaName}_${i}`] || '';
+          return s;
+        }),
+        desc: areaData.desc
+      };
+    }
+    // Ensure default areas exist
+    const defaults = lang === 'en' ? DEFAULT_AREAS_EN : DEFAULT_AREAS_ZH;
+    defaults.forEach(d => {
+      if (!card.areas[d]) card.areas[d] = { images: [], desc: '' };
+    });
+    data.push(card);
+  }
+  return true;
+}
+
+function showSaveStatus() {
+  const el = document.getElementById('saveStatus');
+  const text = document.getElementById('saveStatusText');
+  text.textContent = t('saved');
+  el.classList.add('show', 'saved');
+  setTimeout(() => el.classList.remove('show', 'saved'), 1500);
+}
+
+// ========== Render ==========
+function getAreaIcon(name) {
+  const icons = {
+    '卧室': '🛏️', '客厅': '🛋️', '厨房': '🍳', '卫生间': '🚿',
+    '阳台': '🌿', '周边': '🏘️', '交通': '🚗',
+    'Bedroom': '🛏️', 'Living Room': '🛋️', 'Kitchen': '🍳', 'Bathroom': '🚿',
+    'Balcony': '🌿', 'Surroundings': '🏘️', 'Transport': '🚗'
+  };
+  return icons[name] || '📌';
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  data.forEach((card, ci) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.dataset.id = card.id;
+
+    let tags = '';
+    if (card.location) tags += `<span class="tag">${t('tagLocation')}${card.location}</span>`;
+    if (card.roomType) tags += `<span class="tag">${t('tagRoom')}${card.roomType}</span>`;
+
+    let areasHtml = '';
+    for (const [areaName, areaData] of Object.entries(card.areas)) {
+      let imgsHtml = '';
+      areaData.images.forEach((src, ii) => {
+        imgsHtml += `
+          <div class="img-slot has-img" onclick="pickImage(${ci},'${areaName}',${ii})">
+            <img src="${src}" alt="">
+            <button class="remove-btn" onclick="event.stopPropagation();removeImage(${ci},'${areaName}',${ii})">×</button>
+          </div>`;
+      });
+      imgsHtml += `
+        <div class="img-slot" onclick="pickImage(${ci},'${areaName}',${areaData.images.length})">
+          <div class="add-icon">+</div>
+        </div>`;
+
+      areasHtml += `
+        <div class="area-section">
+          <h3>${getAreaIcon(areaName)} ${areaName}
+            <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;" onclick="removeArea(${ci},'${areaName}')">${t('deleteArea')}</button>
+          </h3>
+          <div class="area-images">${imgsHtml}</div>
+          <textarea class="area-desc" placeholder="${t('areaDescPlaceholder')(areaName)}"
+            onchange="updateAreaDesc(${ci},'${areaName}',this.value)">${areaData.desc}</textarea>
+        </div>`;
+    }
+
+    const videoHtml = card.videoSrc
+      ? `<div class="video-wrapper">
+           ${card.videoSrc.match(/\.(mp4|webm|ogg)|data:video/i) || card.videoType === 'blob'
+             ? `<video controls src="${card.videoSrc}"></video>`
+             : `<iframe src="${card.videoSrc}" style="width:100%;aspect-ratio:16/9;border:none;" allowfullscreen></iframe>`
+           }
+         </div>`
+      : `<div class="video-wrapper" onclick="pickVideo(${ci})">
+           <div class="video-placeholder">
+             <div class="v-icon">🎬</div>
+             <p>${t('clickUpload')}</p>
+           </div>
+         </div>`;
+
+    el.innerHTML = `
+      <div class="card-header">
+        <h2>${card.name}</h2>
+        ${card.price ? `<div class="price">${card.price}</div>` : ''}
+      </div>
+      ${tags ? `<div class="card-meta">${tags}</div>` : ''}
+      ${card.notes ? `<div class="card-notes">${card.notes}</div>` : ''}
+      ${card.link ? `<div class="card-link"><a href="${card.link}" target="_blank">${t('viewLink')}</a></div>` : ''}
+      <div class="card-actions">
+        <button onclick="editCard(${ci})">${t('edit')}</button>
+        <button onclick="removeCard(${ci})">${t('deleteCard')}</button>
+      </div>
+      <button class="expand-btn" onclick="toggleDetail(this)">
+        <span class="arrow">▼</span> ${t('expandDetail')}
+      </button>
+      <div class="card-detail">
+        <div class="video-section">
+          <h3>${t('videoIntro')}</h3>
+          ${videoHtml}
+          <div class="video-actions">
+            <button onclick="pickVideo(${ci})">${t('uploadVideo')}</button>
+            <button onclick="toggleVideoUrl(${ci})">${t('addLink')}</button>
+            ${card.videoSrc ? `<button onclick="removeVideo(${ci})">${t('remove')}</button>` : ''}
+          </div>
+          <div class="video-url-input" id="vurl_${ci}">
+            <input placeholder="${t('videoLinkPlaceholder')}" id="vurl_input_${ci}">
+            <button onclick="setVideoUrl(${ci})">OK</button>
+          </div>
+        </div>
+        ${areasHtml}
+        <button class="add-area-btn" onclick="openAreaModal(${ci})">${t('addArea')}</button>
+      </div>
+      <input type="file" class="hidden-input" accept="video/*" id="vfile_${ci}" onchange="handleVideo(event,${ci})">
+      <input type="file" class="hidden-input" accept="image/*" id="file_${ci}" onchange="handleImage(event,${ci})">`;
+
+    grid.appendChild(el);
+  });
+}
+
+// ========== Card Actions ==========
+function toggleDetail(btn) {
+  btn.classList.toggle('open');
+  btn.nextElementSibling.classList.toggle('show');
+}
+function expandAll() {
+  document.querySelectorAll('.expand-btn').forEach(b => {
+    b.classList.add('open');
+    b.nextElementSibling.classList.add('show');
+  });
+}
+function collapseAll() {
+  document.querySelectorAll('.expand-btn').forEach(b => {
+    b.classList.remove('open');
+    b.nextElementSibling.classList.remove('show');
+  });
+}
+
+function addCard() {
+  document.getElementById('addModal').classList.add('show');
+  document.getElementById('m_name').focus();
+}
+function closeModal() {
+  document.getElementById('addModal').classList.remove('show');
+  ['m_name','m_price','m_location','m_roomType','m_link','m_notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+function confirmAdd() {
+  const name = document.getElementById('m_name').value.trim();
+  if (!name) { alert(t('enterName')); return; }
+  data.push(createCard({
+    name,
+    price: document.getElementById('m_price').value.trim(),
+    location: document.getElementById('m_location').value.trim(),
+    roomType: document.getElementById('m_roomType').value.trim(),
+    link: document.getElementById('m_link').value.trim(),
+    notes: document.getElementById('m_notes').value.trim(),
+  }));
+  closeModal();
+  render();
+  scheduleAutoSave();
+}
+
+function editCard(ci) {
+  const card = data[ci];
+  document.getElementById('m_name').value = card.name;
+  document.getElementById('m_price').value = card.price;
+  document.getElementById('m_location').value = card.location;
+  document.getElementById('m_roomType').value = card.roomType;
+  document.getElementById('m_link').value = card.link;
+  document.getElementById('m_notes').value = card.notes;
+  document.getElementById('addModal').classList.add('show');
+  const btn = document.querySelector('#addModal .primary');
+  btn.textContent = t('btnSave');
+  btn.onclick = function() {
+    card.name = document.getElementById('m_name').value.trim() || card.name;
+    card.price = document.getElementById('m_price').value.trim();
+    card.location = document.getElementById('m_location').value.trim();
+    card.roomType = document.getElementById('m_roomType').value.trim();
+    card.link = document.getElementById('m_link').value.trim();
+    card.notes = document.getElementById('m_notes').value.trim();
+    closeModal();
+    btn.textContent = t('btnAdd');
+    btn.onclick = confirmAdd;
+    render();
+    scheduleAutoSave();
+  };
+}
+
+function removeCard(ci) {
+  if (!confirm(t('confirmDelete')(data[ci].name))) return;
+  const id = data[ci].id;
+  data.splice(ci, 1);
+  dbDelete('blob_' + id); // clean up blobs
+  render();
+  scheduleAutoSave();
+}
+
+// ========== Image Handling ==========
+function pickImage(ci, areaName, slotIdx) {
+  currentCardIdx = ci;
+  currentAreaKey = areaName;
+  let input = document.getElementById('file_' + ci);
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.className = 'hidden-input';
+    input.id = 'file_' + ci;
+    input.onchange = function(e) { handleImage(e, ci); };
+    document.body.appendChild(input);
+  }
+  input.dataset.slotIdx = slotIdx;
+  input.click();
+}
+
+function handleImage(e, ci) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const slotIdx = parseInt(e.target.dataset.slotIdx);
+    const area = data[ci].areas[currentAreaKey];
+    if (slotIdx < area.images.length) {
+      area.images[slotIdx] = ev.target.result;
+    } else {
+      area.images.push(ev.target.result);
+    }
+    render();
+    expandCard(ci);
+    scheduleAutoSave();
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function removeImage(ci, areaName, idx) {
+  data[ci].areas[areaName].images.splice(idx, 1);
+  render();
+  expandCard(ci);
+  scheduleAutoSave();
+}
+
+function updateAreaDesc(ci, areaName, val) {
+  data[ci].areas[areaName].desc = val;
+  scheduleAutoSave();
+}
+
+// ========== Area Management ==========
+function openAreaModal(ci) {
+  currentCardIdx = ci;
+  document.getElementById('areaModal').classList.add('show');
+  document.getElementById('area_name').focus();
+}
+function closeAreaModal() {
+  document.getElementById('areaModal').classList.remove('show');
+  document.getElementById('area_name').value = '';
+}
+function confirmArea() {
+  const name = document.getElementById('area_name').value.trim();
+  if (!name) { alert(t('enterAreaName')); return; }
+  if (data[currentCardIdx].areas[name]) { alert(t('areaExists')); return; }
+  data[currentCardIdx].areas[name] = { images: [], desc: '' };
+  closeAreaModal();
+  render();
+  expandCard(currentCardIdx);
+  scheduleAutoSave();
+}
+
+function removeArea(ci, areaName) {
+  if (!confirm(t('confirmDeleteArea')(areaName))) return;
+  delete data[ci].areas[areaName];
+  render();
+  expandCard(ci);
+  scheduleAutoSave();
+}
+
+// ========== Video Handling ==========
+function pickVideo(ci) {
+  const input = document.getElementById('vfile_' + ci);
+  if (input) input.click();
+}
+
+function handleVideo(e, ci) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    data[ci].videoSrc = ev.target.result;
+    data[ci].videoType = 'blob';
+    render();
+    expandCard(ci);
+    scheduleAutoSave();
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function toggleVideoUrl(ci) {
+  const el = document.getElementById('vurl_' + ci);
+  el.classList.toggle('show');
+  if (el.classList.contains('show')) {
+    document.getElementById('vurl_input_' + ci).focus();
+  }
+}
+
+function setVideoUrl(ci) {
+  const url = document.getElementById('vurl_input_' + ci).value.trim();
+  if (!url) return;
+  data[ci].videoSrc = url;
+  data[ci].videoType = 'url';
+  render();
+  expandCard(ci);
+  scheduleAutoSave();
+}
+
+function removeVideo(ci) {
+  data[ci].videoSrc = '';
+  data[ci].videoType = '';
+  render();
+  expandCard(ci);
+  scheduleAutoSave();
+}
+
+function expandCard(ci) {
+  const cardEl = document.querySelector(`[data-id="${data[ci].id}"]`);
+  if (cardEl) {
+    const btn = cardEl.querySelector('.expand-btn');
+    btn.classList.add('open');
+    btn.nextElementSibling.classList.add('show');
+  }
+}
+
+// ========== Export Shareable HTML ==========
+async function exportShare() {
+  const overlay = document.getElementById('progressOverlay');
+  const fill = document.getElementById('progressFill');
+  const pText = document.getElementById('progressText');
+  overlay.classList.add('show');
+  fill.style.width = '0%';
+  pText.textContent = t('savePreparing');
+
+  await new Promise(r => setTimeout(r, 100));
+
+  // Collect all media as data URLs
+  const totalCards = data.length;
+  let processed = 0;
+
+  for (const card of data) {
+    processed++;
+    pText.textContent = `${t('saveProcessing')} (${processed}/${totalCards})`;
+    fill.style.width = `${(processed / (totalCards + 1)) * 80}%`;
+    await new Promise(r => setTimeout(r, 50)); // yield to UI
+  }
+
+  pText.textContent = t('saveWriting');
+  fill.style.width = '90%';
+  await new Promise(r => setTimeout(r, 50));
+
+  // Build the shareable HTML
+  const shareHTML = buildShareHTML();
+  fill.style.width = '100%';
+  pText.textContent = t('saveDone');
+
+  const blob = new Blob([shareHTML], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `house-compare_${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+
+  setTimeout(() => overlay.classList.remove('show'), 1200);
+}
+
+function buildShareHTML() {
+  const cardsJSON = JSON.stringify(data);
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${t('shareTitle')}</title>
+<style>
+  :root{--bg:#f5f5f0;--card:#fff;--text:#1a1a1a;--text2:#666;--border:#e8e8e3;--accent:#2d2d2d;--accent-light:#f0efe9;--tag:#e8e7e0;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 10px 40px rgba(0,0,0,.08)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .header{text-align:center;padding:48px 24px 24px}
+  .header h1{font-size:28px;font-weight:600;letter-spacing:-.5px;margin-bottom:6px}
+  .header p{color:var(--text2);font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:0 24px 60px;max-width:1400px;margin:0 auto}
+  .card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;transition:box-shadow .2s}
+  .card:hover{box-shadow:var(--shadow-lg)}
+  .card-header{padding:24px 24px 16px;display:flex;justify-content:space-between;align-items:flex-start}
+  .card-header h2{font-size:18px;font-weight:600;line-height:1.3}
+  .card-header .price{font-size:18px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:12px}
+  .card-meta{padding:0 24px 16px;display:flex;gap:6px;flex-wrap:wrap}
+  .tag{display:inline-flex;align-items:center;gap:4px;background:var(--tag);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:12px}
+  .card-notes{padding:0 24px 12px;color:var(--text2);font-size:13px;line-height:1.5}
+  .card-link{padding:0 24px 16px}
+  .card-link a{color:var(--accent);font-size:13px;text-decoration:none;border-bottom:1px solid var(--border);padding-bottom:1px}
+  .expand-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;background:none;border:none;border-top:1px solid var(--border);color:var(--text2);font-size:13px;cursor:pointer;transition:background .15s}
+  .expand-btn:hover{background:var(--accent-light)}
+  .expand-btn .arrow{display:inline-block;transition:transform .25s;font-size:11px}
+  .expand-btn.open .arrow{transform:rotate(180deg)}
+  .card-detail{display:none;border-top:1px solid var(--border)}
+  .card-detail.show{display:block}
+  .area-section{padding:20px 24px;border-bottom:1px solid var(--border)}
+  .area-section:last-child{border-bottom:none}
+  .area-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+  .area-images{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px}
+  .area-images .img-slot{aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border)}
+  .area-images .img-slot img{width:100%;height:100%;object-fit:cover}
+  .area-desc{width:100%;min-height:36px;border:none;padding:8px 0;font-size:13px;font-family:inherit;color:var(--text);background:transparent;line-height:1.5;pointer-events:none}
+  .video-section{padding:20px 24px;border-bottom:1px solid var(--border)}
+  .video-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+  .video-wrapper{position:relative;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);min-height:120px;display:flex;align-items:center;justify-content:center}
+  .video-wrapper video,.video-wrapper iframe{width:100%;border-radius:8px;display:block}
+  @media(max-width:768px){.grid{grid-template-columns:1fr}.header{padding:40px 20px 20px}.header h1{font-size:22px}.grid{padding:0 16px 40px}.area-images{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>${t('title')}</h1>
+  <p>${lang === 'en' ? 'Shared view · Read only' : '分享查看 · 只读模式'}</p>
+</div>
+<div class="grid" id="grid"></div>
+<script>
+const CARDS = ${cardsJSON};
+const LANG = "${lang}";
+const T = ${JSON.stringify(I18N[lang])};
+function getAreaIcon(n){return${JSON.stringify({...I18N.zh,...I18N.en})}[n]||'📌'}
+const AREA_ICONS={'卧室':'🛏️','客厅':'🛋️','厨房':'🍳','卫生间':'🚿','阳台':'🌿','周边':'🏘️','交通':'🚗','Bedroom':'🛏️','Living Room':'🛋️','Kitchen':'🍳','Bathroom':'🚿','Balcony':'🌿','Surroundings':'🏘️','Transport':'🚗'};
+
+function render(){
+  const grid=document.getElementById('grid');grid.innerHTML='';
+  CARDS.forEach((card,ci)=>{
+    let tags='';
+    if(card.location)tags+='<span class="tag">📍'+card.location+'</span>';
+    if(card.roomType)tags+='<span class="tag">🛏️'+card.roomType+'</span>';
+    let areasHtml='';
+    for(const[areaName,areaData]of Object.entries(card.areas)){
+      let imgsHtml='';
+      areaData.images.forEach(src=>{
+        if(src)imgsHtml+='<div class="img-slot"><img src="'+src+'" alt=""></div>';
+      });
+      areasHtml+='<div class="area-section"><h3>'+(AREA_ICONS[areaName]||'📌')+' '+areaName+'</h3><div class="area-images">'+imgsHtml+'</div>'+(areaData.desc?'<div class="area-desc">'+areaData.desc+'</div>':'')+'</div>';
+    }
+    const vidHtml=card.videoSrc
+      ?(card.videoSrc.match(/\\.(mp4|webm|ogg)|data:video/i)||card.videoType==='blob'
+        ?'<video controls src="'+card.videoSrc+'"></video>'
+        :'<iframe src="'+card.videoSrc+'" style="width:100%;aspect-ratio:16/9;border:none;" allowfullscreen></iframe>')
+      :'';
+    el=document.createElement('div');el.className='card';
+    el.innerHTML='<div class="card-header"><h2>'+card.name+'</h2>'+(card.price?'<div class="price">'+card.price+'</div>':'')+'</div>'+(tags?'<div class="card-meta">'+tags+'</div>':'')+(card.notes?'<div class="card-notes">'+card.notes+'</div>':'')+(card.link?'<div class="card-link"><a href="'+card.link+'" target="_blank">🔗 '+(LANG==='en'?'View Link':'查看链接')+'</a></div>':'')+'<button class="expand-btn" onclick="this.classList.toggle(\\'open\\');this.nextElementSibling.classList.toggle(\\'show\\')"><span class="arrow">▼</span> '+(LANG==='en'?'Details':'区域详情')+'</button><div class="card-detail">'+(vidHtml?'<div class="video-section"><h3>🎬 '+(LANG==='en'?'Video Tour':'视频介绍')+'</h3><div class="video-wrapper">'+vidHtml+'</div></div>':'')+areasHtml+'</div>';
+    grid.appendChild(el);
+  });
+}
+render();
+<\/script>
+</body>
+</html>`;
+}
+
+// ========== Export/Import JSON ==========
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `house-compare_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function importJSON() {
+  document.getElementById('loadFile').click();
+}
+
+function handleLoadFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const loaded = JSON.parse(ev.target.result);
+      data = loaded.map(card => {
+        if (!card.id) card.id = genId();
+        if (!card.videoSrc) card.videoSrc = '';
+        if (!card.videoType) card.videoType = card.videoSrc ? 'url' : '';
+        if (!card.areas) card.areas = getDefaultAreas();
+        return card;
+      });
+      render();
+      saveToDB();
+    } catch (err) {
+      alert(t('fileError'));
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function clearAll() {
+  if (!confirm(t('confirmClear'))) return;
+  data = [];
+  render();
+  saveToDB();
+}
+
+// ========== Init ==========
+async function init() {
+  applyLang();
+  const loaded = await loadFromDB();
+  if (!loaded) {
+    // First time: sample data
+    const defaults = lang === 'en' ? DEFAULT_AREAS_EN : DEFAULT_AREAS_ZH;
+    data = [
+      createCard({ name: lang === 'en' ? 'Sample A' : '示例选项A', price: '¥299', location: lang === 'en' ? 'West Lake' : '西湖区', roomType: lang === 'en' ? '2BR · 4 guests' : '两室一厅 · 可住4人' }),
+      createCard({ name: lang === 'en' ? 'Sample B' : '示例选项B', price: '¥450', location: lang === 'en' ? 'Qiantang River' : '钱塘江边', roomType: lang === 'en' ? '3BR · 6 guests' : '三室两厅 · 可住6人' }),
+    ];
+  }
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
