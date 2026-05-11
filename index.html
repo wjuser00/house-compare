@@ -427,7 +427,8 @@
     <p id="t_shareDesc">可分享的 HTML 文件已下载。<br>将该文件发送给对方，即可在 WhatsApp 中直接打开查看。</p>
     <div class="share-buttons">
       <button class="whatsapp-share-btn" onclick="shareViaWhatsApp()">📱 WhatsApp 分享</button>
-      <button class="copy-btn" onclick="copyShareText()">📋 复制分享文案</button>
+      <button class="copy-btn" onclick="copyShareLink()">🔗 复制链接</button>
+      <button class="copy-btn" onclick="copyShareText()">📋 复制文案</button>
       <button class="close-btn" onclick="closeShareResult()">关闭</button>
     </div>
   </div>
@@ -501,8 +502,8 @@ const I18N = {
     toastExportDone: '✅ 导出完成！',
     toastCopied: '📋 已复制到剪贴板',
     shareSuccess: '导出成功！',
-    shareDesc: '可分享的 HTML 文件已下载。<br>将该文件发送给对方，即可在 WhatsApp 中直接打开查看。<br><br>💡 提示：文件内含所有图片和视频，可离线查看。',
-    shareMessage: '🏠 选房对比 - 请查看这些房源选项：',
+    shareDesc: '可分享的 HTML 文件已下载。<br><br>点击 <b>📱 WhatsApp 分享</b> 会生成一个可点击链接，对方在 WhatsApp 中点开即可查看所有房源。<br><br>也可以点 <b>🔗 复制链接</b> 手动粘贴发送。',
+    shareMessage: '🏠 选房对比 — 点击链接查看所有房源详情（含图片和视频）：',
     close: '关闭',
   },
   en: {
@@ -570,8 +571,8 @@ const I18N = {
     toastExportDone: '✅ Export complete!',
     toastCopied: '📋 Copied to clipboard',
     shareSuccess: 'Export Complete!',
-    shareDesc: 'Shareable HTML file has been downloaded.<br>Send this file to others via WhatsApp to view directly.<br><br>💡 Tip: The file contains all images and videos, works offline.',
-    shareMessage: '🏠 House Compare - Please check these options:',
+    shareDesc: 'Shareable HTML file downloaded.<br><br>Click <b>📱 WhatsApp Share</b> to generate a clickable link. Recipients can view all options directly in WhatsApp.<br><br>Or click <b>🔗 Copy Link</b> to paste manually.',
+    shareMessage: '🏠 House Compare - Click the link to view all options (with photos & videos):',
     close: 'Close',
   }
 };
@@ -1090,6 +1091,12 @@ function pickVideo(ci) {
 function handleVideo(e, ci) {
   const file = e.target.files[0];
   if (!file) return;
+  // Warn if file is very large (data URL limit ~50MB for most browsers)
+  if (file.size > 50 * 1024 * 1024) {
+    showToast(lang === 'en' ? 'Video too large (>50MB). Use link instead.' : '视频文件过大(>50MB)，建议使用链接方式添加。', 'error');
+    e.target.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = function(ev) {
     data[ci].videoSrc = ev.target.result;
@@ -1098,6 +1105,9 @@ function handleVideo(e, ci) {
     expandCard(ci);
     scheduleAutoSave();
     showToast(t('toastVideoUpload'), 'success');
+  };
+  reader.onerror = function() {
+    showToast(lang === 'en' ? 'Video upload failed' : '视频上传失败', 'error');
   };
   reader.readAsDataURL(file);
   e.target.value = '';
@@ -1187,22 +1197,111 @@ function closeShareResult() {
   document.getElementById('shareResultModal').classList.remove('show');
 }
 
+// Build a lightweight share HTML (text only, no images/videos) for URL sharing
+function buildLightShareHTML() {
+  var pageTitle = t('shareTitle');
+  var headerTitle = t('title');
+  var headerSub = lang === 'en' ? 'Shared view \u00b7 Read only' : '\u5206\u4eab\u67e5\u770b \u00b7 \u53ea\u8bfb\u6a21\u5f0f';
+  var expandLabel = lang === 'en' ? 'Details' : '\u533a\u57df\u8be6\u60c5';
+  var videoLabel = lang === 'en' ? 'Video Tour' : '\u89c6\u9891\u4ecb\u7ecd';
+  var viewLinkLabel = lang === 'en' ? 'View Link' : '\u67e5\u770b\u94fe\u63a5';
+
+  // Strip images and videos from data for lightweight version
+  var lightData = data.map(function(card) {
+    var lightAreas = {};
+    Object.keys(card.areas).forEach(function(k) {
+      lightAreas[k] = { images: [], desc: card.areas[k].desc };
+    });
+    return {
+      name: card.name, price: card.price, location: card.location,
+      roomType: card.roomType, link: card.link, notes: card.notes,
+      videoSrc: '', videoType: '', areas: lightAreas
+    };
+  });
+
+  var cardsJSON = JSON.stringify(lightData);
+  var hasMedia = data.some(function(c) {
+    return c.videoSrc || Object.keys(c.areas).some(function(k) { return c.areas[k].images.length > 0; });
+  });
+
+  var css = ':root{--bg:#f5f5f0;--card:#fff;--text:#1a1a1a;--text2:#666;--border:#e8e8e3;--accent:#2d2d2d;--accent-light:#f0efe9;--tag:#e8e7e0;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 10px 40px rgba(0,0,0,.08)}\n*{margin:0;padding:0;box-sizing:border-box}\nbody{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}\n.header{text-align:center;padding:48px 24px 24px}\n.header h1{font-size:28px;font-weight:600;letter-spacing:-.5px;margin-bottom:6px}\n.header p{color:var(--text2);font-size:14px}\n.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:0 24px 60px;max-width:1400px;margin:0 auto}\n.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;transition:box-shadow .2s}\n.card:hover{box-shadow:var(--shadow-lg)}\n.card-header{padding:24px 24px 16px;display:flex;justify-content:space-between;align-items:flex-start}\n.card-header h2{font-size:18px;font-weight:600;line-height:1.3}\n.card-header .price{font-size:18px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:12px}\n.card-meta{padding:0 24px 16px;display:flex;gap:6px;flex-wrap:wrap}\n.tag{display:inline-flex;align-items:center;gap:4px;background:var(--tag);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:12px}\n.card-notes{padding:0 24px 12px;color:var(--text2);font-size:13px;line-height:1.5}\n.card-link{padding:0 24px 16px}\n.card-link a{color:var(--accent);font-size:13px;text-decoration:none;border-bottom:1px solid var(--border);padding-bottom:1px}\n.expand-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;background:none;border:none;border-top:1px solid var(--border);color:var(--text2);font-size:13px;cursor:pointer;transition:background .15s}\n.expand-btn:hover{background:var(--accent-light)}\n.expand-btn .arrow{display:inline-block;transition:transform .25s;font-size:11px}\n.expand-btn.open .arrow{transform:rotate(180deg)}\n.card-detail{display:none;border-top:1px solid var(--border)}\n.card-detail.show{display:block}\n.area-section{padding:20px 24px;border-bottom:1px solid var(--border)}\n.area-section:last-child{border-bottom:none}\n.area-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}\n.area-desc{width:100%;min-height:36px;border:none;padding:8px 0;font-size:13px;font-family:inherit;color:var(--text);background:transparent;line-height:1.5}\n.media-hint{padding:16px 24px;background:var(--accent-light);border-radius:8px;margin:12px 0;text-align:center;color:var(--text2);font-size:13px}\n@media(max-width:768px){.grid{grid-template-columns:1fr}.header{padding:40px 20px 20px}.header h1{font-size:22px}.grid{padding:0 16px 40px}}';
+
+  var shareJS = [
+    'var CARDS=' + cardsJSON + ';',
+    'var LANG=' + JSON.stringify(lang) + ';',
+    'var AREA_ICONS={"\u5367\u5ba4":"\ud83d\udecf\ufe0f","\u5ba2\u5385":"\ud83d\udecb\ufe0f","\u53a8\u623f":"\ud83c\udf73","\u536b\u751f\u95f4":"\ud83d\udebf","\u9633\u53f0":"\ud83c\udf3f","\u5468\u8fb9":"\ud83c\udfd8\ufe0f","\u4ea4\u901a":"\ud83d\ude97","Bedroom":"\ud83d\udecf\ufe0f","Living Room":"\ud83d\udecb\ufe0f","Kitchen":"\ud83c\udf73","Bathroom":"\ud83d\udebf","Balcony":"\ud83c\udf3f","Surroundings":"\ud83c\udfd8\ufe0f","Transport":"\ud83d\ude97"};',
+    'var EXPAND_LABEL=' + JSON.stringify(expandLabel) + ';',
+    'var VIEW_LINK_LABEL=' + JSON.stringify(viewLinkLabel) + ';',
+    'function esc(s){if(!s)return"";var d=document.createElement("div");d.textContent=s;return d.innerHTML}',
+    'function toggleDetail(btn){btn.classList.toggle("open");btn.nextElementSibling.classList.toggle("show")}',
+    'function render(){var grid=document.getElementById("grid");grid.innerHTML="";CARDS.forEach(function(card){var tags="";if(card.location)tags+="<span class=\\"tag\\">\u{1f4cd}"+esc(card.location)+"</span>";if(card.roomType)tags+="<span class=\\"tag\\">\ud83d\udecf\ufe0f"+esc(card.roomType)+"</span>";var areasHtml="";var areaKeys=Object.keys(card.areas);for(var ai=0;ai<areaKeys.length;ai++){var areaName=areaKeys[ai];var areaData=card.areas[areaName];if(areaData.desc){areasHtml+="<div class=\\"area-section\\"><h3>"+(AREA_ICONS[areaName]||"\ud83d\udccc")+" "+esc(areaName)+"</h3><div class=\\"area-desc\\">"+esc(areaData.desc)+"</div></div>"}}var el=document.createElement("div");el.className="card";el.innerHTML="<div class=\\"card-header\\"><h2>"+esc(card.name)+"</h2>"+(card.price?"<div class=\\"price\\">"+esc(card.price)+"</div>":"")+"</div>"+(tags?"<div class=\\"card-meta\\">"+tags+"</div>":"")+(card.notes?"<div class=\\"card-notes\\">"+esc(card.notes)+"</div>":"")+(card.link?"<div class=\\"card-link\\"><a href=\\""+esc(card.link)+"\\" target=\\"_blank\\">\ud83d\udd17 "+VIEW_LINK_LABEL+"</a></div>":"")+((areasHtml)?"<button class=\\"expand-btn\\" onclick=\\"toggleDetail(this)\\"><span class=\\"arrow\\">\u25bc</span> "+EXPAND_LABEL+"</button><div class=\\"card-detail\\">"+areasHtml+"</div>":"");grid.appendChild(el)})}',
+    'render();'
+  ].join('\n');
+
+  var mediaHint = '';
+  if (hasMedia) {
+    mediaHint = lang === 'en'
+      ? '<div class="media-hint">\ud83d\udcf7 This is a text-only preview. Images and videos are in the full version.</div>'
+      : '<div class="media-hint">\ud83d\udcf7 \u6b64\u4e3a\u7cbe\u7b80\u7248\uff08\u4ec5\u6587\u5b57\uff09\uff0c\u56fe\u7247\u548c\u89c6\u9891\u5305\u542b\u5728\u5b8c\u6574\u7248\u4e2d\u3002</div>';
+  }
+
+  var html = '';
+  html += '<!DOCTYPE html>\n<html lang="' + lang + '">\n<head>\n';
+  html += '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+  html += '<title>' + pageTitle + '</title>\n';
+  html += '<style>\n' + css + '\n</style>\n</head>\n<body>\n';
+  html += '<div class="header">\n<h1>' + headerTitle + '</h1>\n<p>' + headerSub + '</p>\n</div>\n';
+  html += mediaHint + '\n';
+  html += '<div class="grid" id="grid"></div>\n';
+  html += '<script>\n' + shareJS + '\n<\/script>\n';
+  html += '</body>\n</html>';
+  return html;
+}
+
 function shareViaWhatsApp() {
-  const text = encodeURIComponent(t('shareMessage') + '\n\n' + (lang === 'en'
-    ? 'Please download and open the attached HTML file to view all house options with photos and videos.'
-    : '请下载并打开附件中的 HTML 文件，查看所有房源选项的照片和视频。'));
-  window.open(`https://wa.me/?text=${text}`, '_blank');
+  // Build lightweight HTML (text only) for the link
+  var shareHTML = buildLightShareHTML();
+  var base64 = btoa(unescape(encodeURIComponent(shareHTML)));
+  var dataUrl = 'data:text/html;charset=utf-8;base64,' + base64;
+
+  var message = t('shareMessage') + '\n\n' + dataUrl;
+  var waLink = 'https://wa.me/?text=' + encodeURIComponent(message);
+
+  if (waLink.length > 65000) {
+    showToast(lang === 'en'
+      ? 'Too much data. Please reduce content or share the downloaded file.'
+      : '内容过多，请精简数据或直接分享已下载的文件。', 'error');
+    return;
+  }
+
+  window.open(waLink, '_blank');
+}
+
+function copyShareLink() {
+  var shareHTML = buildLightShareHTML();
+  var base64 = btoa(unescape(encodeURIComponent(shareHTML)));
+  var dataUrl = 'data:text/html;charset=utf-8;base64,' + base64;
+
+  var message = t('shareMessage') + '\n\n' + dataUrl;
+  navigator.clipboard.writeText(message).then(function() {
+    showToast(t('toastCopied'), 'success');
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = message;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    showToast(t('toastCopied'), 'success');
+  });
 }
 
 function copyShareText() {
-  const text = t('shareMessage') + '\n\n' + (lang === 'en'
-    ? 'Please download and open the attached HTML file to view all house options with photos and videos.'
-    : '请下载并打开附件中的 HTML 文件，查看所有房源选项的照片和视频。');
-  navigator.clipboard.writeText(text).then(() => {
+  var text = t('shareMessage');
+  navigator.clipboard.writeText(text).then(function() {
     showToast(t('toastCopied'), 'success');
-  }).catch(() => {
-    // Fallback
-    const ta = document.createElement('textarea');
+  }).catch(function() {
+    var ta = document.createElement('textarea');
     ta.value = text;
     document.body.appendChild(ta);
     ta.select();
@@ -1213,166 +1312,69 @@ function copyShareText() {
 }
 
 function buildShareHTML() {
-  const cardsJSON = JSON.stringify(data);
-  const i18nJSON = JSON.stringify(I18N[lang]);
-  return `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${t('shareTitle')}</title>
-<style>
-  :root{--bg:#f5f5f0;--card:#fff;--text:#1a1a1a;--text2:#666;--border:#e8e8e3;--accent:#2d2d2d;--accent-light:#f0efe9;--tag:#e8e7e0;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 10px 40px rgba(0,0,0,.08)}
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
-  .header{text-align:center;padding:48px 24px 24px}
-  .header h1{font-size:28px;font-weight:600;letter-spacing:-.5px;margin-bottom:6px}
-  .header p{color:var(--text2);font-size:14px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:0 24px 60px;max-width:1400px;margin:0 auto}
-  .card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;transition:box-shadow .2s}
-  .card:hover{box-shadow:var(--shadow-lg)}
-  .card-header{padding:24px 24px 16px;display:flex;justify-content:space-between;align-items:flex-start}
-  .card-header h2{font-size:18px;font-weight:600;line-height:1.3}
-  .card-header .price{font-size:18px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:12px}
-  .card-meta{padding:0 24px 16px;display:flex;gap:6px;flex-wrap:wrap}
-  .tag{display:inline-flex;align-items:center;gap:4px;background:var(--tag);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:12px}
-  .card-notes{padding:0 24px 12px;color:var(--text2);font-size:13px;line-height:1.5}
-  .card-link{padding:0 24px 16px}
-  .card-link a{color:var(--accent);font-size:13px;text-decoration:none;border-bottom:1px solid var(--border);padding-bottom:1px}
-  .expand-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;background:none;border:none;border-top:1px solid var(--border);color:var(--text2);font-size:13px;cursor:pointer;transition:background .15s}
-  .expand-btn:hover{background:var(--accent-light)}
-  .expand-btn .arrow{display:inline-block;transition:transform .25s;font-size:11px}
-  .expand-btn.open .arrow{transform:rotate(180deg)}
-  .card-detail{display:none;border-top:1px solid var(--border)}
-  .card-detail.show{display:block}
-  .area-section{padding:20px 24px;border-bottom:1px solid var(--border)}
-  .area-section:last-child{border-bottom:none}
-  .area-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-  .area-images{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px}
-  .area-images .img-slot{aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);cursor:pointer;transition:transform .2s,box-shadow .2s}
-  .area-images .img-slot:hover{transform:scale(1.03);box-shadow:0 4px 16px rgba(0,0,0,0.12)}
-  .area-images .img-slot img{width:100%;height:100%;object-fit:cover}
-  .area-desc{width:100%;min-height:36px;border:none;padding:8px 0;font-size:13px;font-family:inherit;color:var(--text);background:transparent;line-height:1.5}
-  .video-section{padding:20px 24px;border-bottom:1px solid var(--border)}
-  .video-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-  .video-wrapper{position:relative;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);min-height:120px;display:flex;align-items:center;justify-content:center}
-  .video-wrapper video,.video-wrapper iframe{width:100%;border-radius:8px;display:block}
+  // Serialize all card data as JSON (handles all escaping correctly)
+  var cardsJSON = JSON.stringify(data);
+  var pageTitle = t('shareTitle');
+  var headerTitle = t('title');
+  var headerSub = lang === 'en' ? 'Shared view \u00b7 Read only' : '\u5206\u4eab\u67e5\u770b \u00b7 \u53ea\u8bfb\u6a21\u5f0f';
+  var expandLabel = lang === 'en' ? 'Details' : '\u533a\u57df\u8be6\u60c5';
+  var videoLabel = lang === 'en' ? 'Video Tour' : '\u89c6\u9891\u4ecb\u7ecd';
+  var viewLinkLabel = lang === 'en' ? 'View Link' : '\u67e5\u770b\u94fe\u63a5';
 
-  /* Lightbox */
-  .lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;padding:20px}
-  .lightbox-overlay.show{display:flex}
-  .lightbox-overlay img{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5);cursor:default}
-  .lightbox-close{position:fixed;top:20px;right:24px;z-index:10000;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
-  .lightbox-close:hover{background:rgba(255,255,255,0.3)}
-  .lightbox-nav{position:fixed;top:50%;transform:translateY(-50%);z-index:10000;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
-  .lightbox-nav:hover{background:rgba(255,255,255,0.3)}
-  .lightbox-prev{left:16px}
-  .lightbox-next{right:16px}
-  .lightbox-counter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.7);font-size:14px;z-index:10000;background:rgba(0,0,0,0.4);padding:6px 16px;border-radius:20px}
+  // CSS as plain string
+  var css = ':root{--bg:#f5f5f0;--card:#fff;--text:#1a1a1a;--text2:#666;--border:#e8e8e3;--accent:#2d2d2d;--accent-light:#f0efe9;--tag:#e8e7e0;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 10px 40px rgba(0,0,0,.08)}\n*{margin:0;padding:0;box-sizing:border-box}\nbody{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}\n.header{text-align:center;padding:48px 24px 24px}\n.header h1{font-size:28px;font-weight:600;letter-spacing:-.5px;margin-bottom:6px}\n.header p{color:var(--text2);font-size:14px}\n.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:0 24px 60px;max-width:1400px;margin:0 auto}\n.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;transition:box-shadow .2s}\n.card:hover{box-shadow:var(--shadow-lg)}\n.card-header{padding:24px 24px 16px;display:flex;justify-content:space-between;align-items:flex-start}\n.card-header h2{font-size:18px;font-weight:600;line-height:1.3}\n.card-header .price{font-size:18px;font-weight:600;color:var(--accent);white-space:nowrap;margin-left:12px}\n.card-meta{padding:0 24px 16px;display:flex;gap:6px;flex-wrap:wrap}\n.tag{display:inline-flex;align-items:center;gap:4px;background:var(--tag);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:12px}\n.card-notes{padding:0 24px 12px;color:var(--text2);font-size:13px;line-height:1.5}\n.card-link{padding:0 24px 16px}\n.card-link a{color:var(--accent);font-size:13px;text-decoration:none;border-bottom:1px solid var(--border);padding-bottom:1px}\n.expand-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;background:none;border:none;border-top:1px solid var(--border);color:var(--text2);font-size:13px;cursor:pointer;transition:background .15s}\n.expand-btn:hover{background:var(--accent-light)}\n.expand-btn .arrow{display:inline-block;transition:transform .25s;font-size:11px}\n.expand-btn.open .arrow{transform:rotate(180deg)}\n.card-detail{display:none;border-top:1px solid var(--border)}\n.card-detail.show{display:block}\n.area-section{padding:20px 24px;border-bottom:1px solid var(--border)}\n.area-section:last-child{border-bottom:none}\n.area-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}\n.area-images{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px}\n.area-images .img-slot{aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);cursor:pointer;transition:transform .2s,box-shadow .2s}\n.area-images .img-slot:hover{transform:scale(1.03);box-shadow:0 4px 16px rgba(0,0,0,0.12)}\n.area-images .img-slot img{width:100%;height:100%;object-fit:cover}\n.area-desc{width:100%;min-height:36px;border:none;padding:8px 0;font-size:13px;font-family:inherit;color:var(--text);background:transparent;line-height:1.5}\n.video-section{padding:20px 24px;border-bottom:1px solid var(--border)}\n.video-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}\n.video-wrapper{position:relative;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);min-height:120px;display:flex;align-items:center;justify-content:center}\n.video-wrapper video,.video-wrapper iframe{width:100%;border-radius:8px;display:block}\n.lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;padding:20px}\n.lightbox-overlay.show{display:flex}\n.lightbox-overlay img{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5);cursor:default}\n.lightbox-close{position:fixed;top:20px;right:24px;z-index:10000;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}\n.lightbox-close:hover{background:rgba(255,255,255,0.3)}\n.lightbox-nav{position:fixed;top:50%;transform:translateY(-50%);z-index:10000;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}\n.lightbox-nav:hover{background:rgba(255,255,255,0.3)}\n.lightbox-prev{left:16px}\n.lightbox-next{right:16px}\n.lightbox-counter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.7);font-size:14px;z-index:10000;background:rgba(0,0,0,0.4);padding:6px 16px;border-radius:20px}\n@media(max-width:768px){.grid{grid-template-columns:1fr}.header{padding:40px 20px 20px}.header h1{font-size:22px}.grid{padding:0 16px 40px}.area-images{grid-template-columns:repeat(3,1fr)}.lightbox-nav{width:36px;height:36px;font-size:20px}.lightbox-prev{left:8px}.lightbox-next{right:8px}}';
 
-  @media(max-width:768px){
-    .grid{grid-template-columns:1fr}
-    .header{padding:40px 20px 20px}
-    .header h1{font-size:22px}
-    .grid{padding:0 16px 40px}
-    .area-images{grid-template-columns:repeat(3,1fr)}
-    .lightbox-nav{width:36px;height:36px;font-size:20px}
-    .lightbox-prev{left:8px}
-    .lightbox-next{right:8px}
-  }
-</style>
-</head>
-<body>
-<div class="header">
-  <h1>${t('title')}</h1>
-  <p>${lang === 'en' ? 'Shared view · Read only' : '分享查看 · 只读模式'}</p>
-</div>
-<div class="grid" id="grid"></div>
+  // Share page JS: use data-idx attribute + event delegation (NO inline onclick)
+  // This completely avoids the quote-escaping nightmare
+  var shareJS = [
+    'var CARDS=' + cardsJSON + ';',
+    'var LANG=' + JSON.stringify(lang) + ';',
+    'var AREA_ICONS={"\u5367\u5ba4":"\ud83d\udecf\ufe0f","\u5ba2\u5385":"\ud83d\udecb\ufe0f","\u53a8\u623f":"\ud83c\udf73","\u536b\u751f\u95f4":"\ud83d\udebf","\u9633\u53f0":"\ud83c\udf3f","\u5468\u8fb9":"\ud83c\udfd8\ufe0f","\u4ea4\u901a":"\ud83d\ude97","Bedroom":"\ud83d\udecf\ufe0f","Living Room":"\ud83d\udecb\ufe0f","Kitchen":"\ud83c\udf73","Bathroom":"\ud83d\udebf","Balcony":"\ud83c\udf3f","Surroundings":"\ud83c\udfd8\ufe0f","Transport":"\ud83d\ude97"};',
+    'var EXPAND_LABEL=' + JSON.stringify(expandLabel) + ';',
+    'var VIDEO_LABEL=' + JSON.stringify(videoLabel) + ';',
+    'var VIEW_LINK_LABEL=' + JSON.stringify(viewLinkLabel) + ';',
+    'var allImages=[];var currentLightboxIdx=0;',
+    'function esc(s){if(!s)return"";var d=document.createElement("div");d.textContent=s;return d.innerHTML}',
+    'function openLightbox(idx){currentLightboxIdx=idx;showLightboxImage();document.getElementById("lightbox").classList.add("show");document.body.style.overflow="hidden"}',
+    'function closeLightbox(e){if(e&&e.target!==e.currentTarget&&!e.target.classList.contains("lightbox-close"))return;document.getElementById("lightbox").classList.remove("show");document.body.style.overflow=""}',
+    'function navLightbox(dir){currentLightboxIdx=(currentLightboxIdx+dir+allImages.length)%allImages.length;showLightboxImage()}',
+    'function showLightboxImage(){document.getElementById("lightboxImg").src=allImages[currentLightboxIdx];document.getElementById("lightboxCounter").textContent=(currentLightboxIdx+1)+" / "+allImages.length}',
+    'function toggleDetail(btn){btn.classList.toggle("open");btn.nextElementSibling.classList.toggle("show")}',
+    'document.addEventListener("keydown",function(e){if(!document.getElementById("lightbox").classList.contains("show"))return;if(e.key==="Escape")closeLightbox(e);if(e.key==="ArrowLeft")navLightbox(-1);if(e.key==="ArrowRight")navLightbox(1)});',
+    // Event delegation: clicking any .img-slot with data-idx opens lightbox
+    'document.addEventListener("click",function(e){var slot=e.target.closest(".img-slot[data-idx]");if(slot){openLightbox(parseInt(slot.getAttribute("data-idx")))}});',
+    // Render function: builds HTML using data attributes, no inline JS with quotes
+    'function render(){allImages=[];var grid=document.getElementById("grid");grid.innerHTML="";CARDS.forEach(function(card){var tags="";if(card.location)tags+="<span class=\\"tag\\">\u{1f4cd}"+esc(card.location)+"</span>";if(card.roomType)tags+="<span class=\\"tag\\">\ud83d\udecf\ufe0f"+esc(card.roomType)+"</span>";var areasHtml="";var areaKeys=Object.keys(card.areas);for(var ai=0;ai<areaKeys.length;ai++){var areaName=areaKeys[ai];var areaData=card.areas[areaName];var imgsHtml="";for(var ii=0;ii<areaData.images.length;ii++){var src=areaData.images[ii];if(src){allImages.push(src);imgsHtml+="<div class=\\"img-slot\\" data-idx=\\""+(allImages.length-1)+"\\"><img src=\\""+src+"\\" alt=\\"\\"></div>"}}areasHtml+="<div class=\\"area-section\\"><h3>"+(AREA_ICONS[areaName]||"\ud83d\udccc")+" "+esc(areaName)+"</h3><div class=\\"area-images\\">"+imgsHtml+"</div>"+(areaData.desc?"<div class=\\"area-desc\\">"+esc(areaData.desc)+"</div>":"")+"</div>"}var vidHtml="";if(card.videoSrc){var isVid=card.videoType==="blob"||/\\.mp4|\\.webm|\\.ogg/i.test(card.videoSrc)||card.videoSrc.indexOf("data:video")===0;if(isVid){vidHtml="<video controls src=\\""+card.videoSrc+"\\"></video>"}else{vidHtml="<iframe src=\\""+card.videoSrc+"\\" style=\\"width:100%;aspect-ratio:16/9;border:none;\\" allowfullscreen></iframe>"}vidHtml="<div class=\\"video-section\\"><h3>\ud83c\udfac "+VIDEO_LABEL+"</h3><div class=\\"video-wrapper\\">"+vidHtml+"</div></div>"}var el=document.createElement("div");el.className="card";el.innerHTML="<div class=\\"card-header\\"><h2>"+esc(card.name)+"</h2>"+(card.price?"<div class=\\"price\\">"+esc(card.price)+"</div>":"")+"</div>"+(tags?"<div class=\\"card-meta\\">"+tags+"</div>":"")+(card.notes?"<div class=\\"card-notes\\">"+esc(card.notes)+"</div>":"")+(card.link?"<div class=\\"card-link\\"><a href=\\""+esc(card.link)+"\\" target=\\"_blank\\">\ud83d\udd17 "+VIEW_LINK_LABEL+"</a></div>":"")+"<button class=\\"expand-btn\\" onclick=\\"toggleDetail(this)\\"><span class=\\"arrow\\">\u25bc</span> "+EXPAND_LABEL+"</button><div class=\\"card-detail\\">"+vidHtml+areasHtml+"</div>";grid.appendChild(el)})}',
+    'render();'
+  ].join('\n');
 
-<!-- Lightbox -->
-<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
-  <button class="lightbox-close" onclick="closeLightbox(event)">×</button>
-  <button class="lightbox-nav lightbox-prev" onclick="event.stopPropagation();navLightbox(-1)">‹</button>
-  <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()">
-  <button class="lightbox-nav lightbox-next" onclick="event.stopPropagation();navLightbox(1)">›</button>
-  <div class="lightbox-counter" id="lightboxCounter"></div>
-</div>
-
-<script>
-const CARDS = ${cardsJSON};
-const LANG = "${lang}";
-const T = ${i18nJSON};
-const AREA_ICONS={'卧室':'🛏️','客厅':'🛋️','厨房':'🍳','卫生间':'🚿','阳台':'🌿','周边':'🏘️','交通':'🚗','Bedroom':'🛏️','Living Room':'🛋️','Kitchen':'🍳','Bathroom':'🚿','Balcony':'🌿','Surroundings':'🏘️','Transport':'🚗'};
-
-// Lightbox state
-let allImages = [];
-let currentLightboxIdx = 0;
-
-function openLightbox(imgSrc) {
-  currentLightboxIdx = allImages.indexOf(imgSrc);
-  if (currentLightboxIdx === -1) { allImages.push(imgSrc); currentLightboxIdx = allImages.length - 1; }
-  showLightboxImage();
-  document.getElementById('lightbox').classList.add('show');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeLightbox(e) {
-  if (e && e.target !== e.currentTarget && !e.target.classList.contains('lightbox-close')) return;
-  document.getElementById('lightbox').classList.remove('show');
-  document.body.style.overflow = '';
-}
-
-function navLightbox(dir) {
-  currentLightboxIdx = (currentLightboxIdx + dir + allImages.length) % allImages.length;
-  showLightboxImage();
-}
-
-function showLightboxImage() {
-  document.getElementById('lightboxImg').src = allImages[currentLightboxIdx];
-  document.getElementById('lightboxCounter').textContent = (currentLightboxIdx + 1) + ' / ' + allImages.length;
-}
-
-// Keyboard navigation
-document.addEventListener('keydown', function(e) {
-  if (!document.getElementById('lightbox').classList.contains('show')) return;
-  if (e.key === 'Escape') closeLightbox(e);
-  if (e.key === 'ArrowLeft') navLightbox(-1);
-  if (e.key === 'ArrowRight') navLightbox(1);
-});
-
-function render(){
-  allImages = [];
-  const grid=document.getElementById('grid');grid.innerHTML='';
-  CARDS.forEach((card,ci)=>{
-    let tags='';
-    if(card.location)tags+='<span class="tag">📍'+card.location+'</span>';
-    if(card.roomType)tags+='<span class="tag">🛏️'+card.roomType+'</span>';
-    let areasHtml='';
-    for(const[areaName,areaData]of Object.entries(card.areas)){
-      let imgsHtml='';
-      areaData.images.forEach(src=>{
-        if(src){
-          allImages.push(src);
-          const idx = allImages.length - 1;
-          imgsHtml+='<div class="img-slot" onclick="openLightbox(allImages['+idx+'])"><img src="'+src+'" alt=""></div>';
-        }
-      });
-      areasHtml+='<div class="area-section"><h3>'+(AREA_ICONS[areaName]||'📌')+' '+areaName+'</h3><div class="area-images">'+imgsHtml+'</div>'+(areaData.desc?'<div class="area-desc">'+areaData.desc+'</div>':'')+'</div>';
-    }
-    const vidHtml=card.videoSrc
-      ?(card.videoSrc.match(/\\.(mp4|webm|ogg)|data:video/i)||card.videoType==='blob'
-        ?'<video controls src="'+card.videoSrc+'"></video>'
-        :'<iframe src="'+card.videoSrc+'" style="width:100%;aspect-ratio:16/9;border:none;" allowfullscreen></iframe>')
-      :'';
-    const el=document.createElement('div');el.className='card';
-    el.innerHTML='<div class="card-header"><h2>'+card.name+'</h2>'+(card.price?'<div class="price">'+card.price+'</div>':'')+'</div>'+(tags?'<div class="card-meta">'+tags+'</div>':'')+(card.notes?'<div class="card-notes">'+card.notes+'</div>':'')+(card.link?'<div class="card-link"><a href="'+card.link+'" target="_blank">🔗 '+(LANG==='en'?'View Link':'查看链接')+'</a></div>':'')+'<button class="expand-btn" onclick="this.classList.toggle(\\'open\\');this.nextElementSibling.classList.toggle(\\'show\\')"><span class="arrow">▼</span> '+(LANG==='en'?'Details':'区域详情')+'</button><div class="card-detail">'+(vidHtml?'<div class="video-section"><h3>🎬 '+(LANG==='en'?'Video Tour':'视频介绍')+'</h3><div class="video-wrapper">'+vidHtml+'</div></div>':'')+areasHtml+'</div>';
-    grid.appendChild(el);
-  });
-}
-render();
-<\\/script>
-</body>
-</html>`;
+  // Build the final HTML using string concatenation (NO template literals)
+  var html = '';
+  html += '<!DOCTYPE html>\n';
+  html += '<html lang="' + lang + '">\n';
+  html += '<head>\n';
+  html += '<meta charset="UTF-8">\n';
+  html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+  html += '<title>' + pageTitle + '</title>\n';
+  html += '<style>\n' + css + '\n</style>\n';
+  html += '</head>\n';
+  html += '<body>\n';
+  html += '<div class="header">\n';
+  html += '<h1>' + headerTitle + '</h1>\n';
+  html += '<p>' + headerSub + '</p>\n';
+  html += '</div>\n';
+  html += '<div class="grid" id="grid"></div>\n';
+  html += '<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">\n';
+  html += '<button class="lightbox-close" onclick="closeLightbox(event)">\u00d7</button>\n';
+  html += '<button class="lightbox-nav lightbox-prev" onclick="event.stopPropagation();navLightbox(-1)">\u2039</button>\n';
+  html += '<img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()">\n';
+  html += '<button class="lightbox-nav lightbox-next" onclick="event.stopPropagation();navLightbox(1)">\u203a</button>\n';
+  html += '<div class="lightbox-counter" id="lightboxCounter"></div>\n';
+  html += '</div>\n';
+  html += '<script>\n' + shareJS + '\n<\/script>\n';
+  html += '</body>\n';
+  html += '</html>';
+  return html;
 }
 
 // ========== Export/Import JSON ==========
