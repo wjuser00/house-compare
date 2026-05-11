@@ -56,6 +56,26 @@
   .save-status.show { opacity: 1; transform: translateY(0); }
   .save-status.saved { color: var(--success); border-color: var(--success); }
 
+  /* Toast Notification */
+  .toast-container {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+    z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    pointer-events: none;
+  }
+  .toast {
+    padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 500;
+    color: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    opacity: 0; transform: translateY(-16px) scale(0.95);
+    transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: auto; white-space: nowrap;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0) scale(1); }
+  .toast.success { background: linear-gradient(135deg, #2d8a4e, #34a853); }
+  .toast.info { background: linear-gradient(135deg, #2d5aa8, #4285f4); }
+  .toast.error { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+  .toast .toast-icon { font-size: 18px; }
+
   /* Toolbar */
   .toolbar {
     display: flex; justify-content: center; gap: 8px;
@@ -71,6 +91,8 @@
   .toolbar button.primary-btn:hover { opacity: 0.85; }
   .toolbar button.danger-btn { color: var(--danger); border-color: var(--danger); }
   .toolbar button.danger-btn:hover { background: var(--danger); color: #fff; }
+  .toolbar button.whatsapp-btn { background: #25D366; color: #fff; border-color: #25D366; }
+  .toolbar button.whatsapp-btn:hover { background: #1da851; }
 
   /* Grid */
   .grid {
@@ -271,6 +293,29 @@
   }
   .progress-box p { font-size: 13px; color: var(--text2); }
 
+  /* Share Result Modal */
+  .share-result { text-align: center; }
+  .share-result .check-icon { font-size: 48px; margin-bottom: 12px; }
+  .share-result h3 { margin-bottom: 8px; }
+  .share-result p { color: var(--text2); font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+  .share-result .share-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .share-result .share-buttons button {
+    padding: 10px 20px; border-radius: 8px; font-size: 14px;
+    cursor: pointer; border: none; display: flex; align-items: center; gap: 6px;
+    transition: all 0.15s; font-weight: 500;
+  }
+  .share-result .share-buttons .whatsapp-share-btn {
+    background: #25D366; color: #fff;
+  }
+  .share-result .share-buttons .whatsapp-share-btn:hover { background: #1da851; }
+  .share-result .share-buttons .copy-btn {
+    background: var(--accent); color: #fff;
+  }
+  .share-result .share-buttons .copy-btn:hover { opacity: 0.85; }
+  .share-result .share-buttons .close-btn {
+    background: var(--border); color: var(--text);
+  }
+
   .hidden-input { display: none; }
 
   /* View mode (read-only) */
@@ -308,6 +353,8 @@
   <button id="langZh" onclick="setLang('zh')" class="active">中文</button>
   <button id="langEn" onclick="setLang('en')">EN</button>
 </div>
+
+<div class="toast-container" id="toastContainer"></div>
 
 <div class="header">
   <h1 id="t_title">🏠 选房对比</h1>
@@ -372,6 +419,20 @@
   </div>
 </div>
 
+<!-- Share Result Modal -->
+<div class="modal-overlay" id="shareResultModal">
+  <div class="modal share-result">
+    <div class="check-icon">✅</div>
+    <h3 id="t_shareSuccess">导出成功！</h3>
+    <p id="t_shareDesc">可分享的 HTML 文件已下载。<br>将该文件发送给对方，即可在 WhatsApp 中直接打开查看。</p>
+    <div class="share-buttons">
+      <button class="whatsapp-share-btn" onclick="shareViaWhatsApp()">📱 WhatsApp 分享</button>
+      <button class="copy-btn" onclick="copyShareText()">📋 复制分享文案</button>
+      <button class="close-btn" onclick="closeShareResult()">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ========== i18n ==========
 const I18N = {
@@ -429,6 +490,20 @@ const I18N = {
     deleteCard: '🗑️ 删除',
     tagLocation: '📍',
     tagRoom: '🛏️',
+    toastVideoUpload: '🎬 视频上传成功',
+    toastImageUpload: '🖼️ 图片上传成功',
+    toastVideoLink: '🔗 视频链接已添加',
+    toastVideoRemove: '🗑️ 视频已移除',
+    toastAreaAdded: '📌 区域已添加',
+    toastAreaRemoved: '🗑️ 区域已删除',
+    toastCardAdded: '✅ 选项已添加',
+    toastCardDeleted: '🗑️ 选项已删除',
+    toastExportDone: '✅ 导出完成！',
+    toastCopied: '📋 已复制到剪贴板',
+    shareSuccess: '导出成功！',
+    shareDesc: '可分享的 HTML 文件已下载。<br>将该文件发送给对方，即可在 WhatsApp 中直接打开查看。<br><br>💡 提示：文件内含所有图片和视频，可离线查看。',
+    shareMessage: '🏠 选房对比 - 请查看这些房源选项：',
+    close: '关闭',
   },
   en: {
     title: '🏠 House Compare',
@@ -484,6 +559,20 @@ const I18N = {
     deleteCard: '🗑️ Delete',
     tagLocation: '📍',
     tagRoom: '🛏️',
+    toastVideoUpload: '🎬 Video uploaded successfully',
+    toastImageUpload: '🖼️ Image uploaded successfully',
+    toastVideoLink: '🔗 Video link added',
+    toastVideoRemove: '🗑️ Video removed',
+    toastAreaAdded: '📌 Area added',
+    toastAreaRemoved: '🗑️ Area removed',
+    toastCardAdded: '✅ Option added',
+    toastCardDeleted: '🗑️ Option deleted',
+    toastExportDone: '✅ Export complete!',
+    toastCopied: '📋 Copied to clipboard',
+    shareSuccess: 'Export Complete!',
+    shareDesc: 'Shareable HTML file has been downloaded.<br>Send this file to others via WhatsApp to view directly.<br><br>💡 Tip: The file contains all images and videos, works offline.',
+    shareMessage: '🏠 House Compare - Please check these options:',
+    close: 'Close',
   }
 };
 
@@ -523,7 +612,32 @@ function applyLang() {
   document.getElementById('t_btnAreaCancel').textContent = t('btnAreaCancel');
   document.getElementById('t_btnAreaAdd').textContent = t('btnAreaAdd');
   document.getElementById('t_exporting').textContent = t('exporting');
+  document.getElementById('t_shareSuccess').textContent = t('shareSuccess');
+  document.getElementById('t_shareDesc').innerHTML = t('shareDesc');
   document.title = lang === 'en' ? 'House Compare' : '选房对比';
+}
+
+// ========== Toast Notification ==========
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const icons = { success: '✅', info: 'ℹ️', error: '❌' };
+  toast.innerHTML = `<span class="toast-icon">${icons[type] || '✅'}</span><span>${message}</span>`;
+
+  container.appendChild(toast);
+
+  // Trigger animation
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+
+  // Auto remove
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, 2500);
 }
 
 // ========== IndexedDB ==========
@@ -590,6 +704,7 @@ let data = [];
 let currentCardIdx = null;
 let currentAreaKey = null;
 let autoSaveTimer = null;
+let lastExportedBlob = null;
 
 function genId() { return '_' + Math.random().toString(36).slice(2, 9); }
 
@@ -603,7 +718,7 @@ function createCard(opts = {}) {
     link: opts.link || '',
     notes: opts.notes || '',
     videoSrc: opts.videoSrc || '',
-    videoType: opts.videoType || '', // 'url' | 'blob'
+    videoType: opts.videoType || '',
     areas: opts.areas || getDefaultAreas(),
   };
 }
@@ -618,7 +733,6 @@ function scheduleAutoSave() {
 }
 
 async function saveToDB() {
-  // Save metadata (without large blobs) and large blobs separately
   const meta = data.map(card => ({
     id: card.id,
     name: card.name,
@@ -642,7 +756,6 @@ async function saveToDB() {
   }));
   await dbPut('meta', meta);
 
-  // Save each card's blobs
   for (const card of data) {
     const blobs = {};
     if (card.videoSrc && card.videoSrc.startsWith('data:')) {
@@ -685,7 +798,6 @@ async function loadFromDB() {
         desc: areaData.desc
       };
     }
-    // Ensure default areas exist
     const defaults = lang === 'en' ? DEFAULT_AREAS_EN : DEFAULT_AREAS_ZH;
     defaults.forEach(d => {
       if (!card.areas[d]) card.areas[d] = { images: [], desc: '' };
@@ -847,6 +959,7 @@ function confirmAdd() {
   closeModal();
   render();
   scheduleAutoSave();
+  showToast(t('toastCardAdded'), 'success');
 }
 
 function editCard(ci) {
@@ -872,6 +985,7 @@ function editCard(ci) {
     btn.onclick = confirmAdd;
     render();
     scheduleAutoSave();
+    showToast(t('toastCardAdded'), 'success');
   };
 }
 
@@ -879,9 +993,10 @@ function removeCard(ci) {
   if (!confirm(t('confirmDelete')(data[ci].name))) return;
   const id = data[ci].id;
   data.splice(ci, 1);
-  dbDelete('blob_' + id); // clean up blobs
+  dbDelete('blob_' + id);
   render();
   scheduleAutoSave();
+  showToast(t('toastCardDeleted'), 'info');
 }
 
 // ========== Image Handling ==========
@@ -917,6 +1032,7 @@ function handleImage(e, ci) {
     render();
     expandCard(ci);
     scheduleAutoSave();
+    showToast(t('toastImageUpload'), 'success');
   };
   reader.readAsDataURL(file);
   e.target.value = '';
@@ -953,6 +1069,7 @@ function confirmArea() {
   render();
   expandCard(currentCardIdx);
   scheduleAutoSave();
+  showToast(t('toastAreaAdded'), 'success');
 }
 
 function removeArea(ci, areaName) {
@@ -961,6 +1078,7 @@ function removeArea(ci, areaName) {
   render();
   expandCard(ci);
   scheduleAutoSave();
+  showToast(t('toastAreaRemoved'), 'info');
 }
 
 // ========== Video Handling ==========
@@ -979,6 +1097,7 @@ function handleVideo(e, ci) {
     render();
     expandCard(ci);
     scheduleAutoSave();
+    showToast(t('toastVideoUpload'), 'success');
   };
   reader.readAsDataURL(file);
   e.target.value = '';
@@ -1000,6 +1119,7 @@ function setVideoUrl(ci) {
   render();
   expandCard(ci);
   scheduleAutoSave();
+  showToast(t('toastVideoLink'), 'success');
 }
 
 function removeVideo(ci) {
@@ -1008,6 +1128,7 @@ function removeVideo(ci) {
   render();
   expandCard(ci);
   scheduleAutoSave();
+  showToast(t('toastVideoRemove'), 'info');
 }
 
 function expandCard(ci) {
@@ -1030,7 +1151,6 @@ async function exportShare() {
 
   await new Promise(r => setTimeout(r, 100));
 
-  // Collect all media as data URLs
   const totalCards = data.length;
   let processed = 0;
 
@@ -1038,29 +1158,63 @@ async function exportShare() {
     processed++;
     pText.textContent = `${t('saveProcessing')} (${processed}/${totalCards})`;
     fill.style.width = `${(processed / (totalCards + 1)) * 80}%`;
-    await new Promise(r => setTimeout(r, 50)); // yield to UI
+    await new Promise(r => setTimeout(r, 50));
   }
 
   pText.textContent = t('saveWriting');
   fill.style.width = '90%';
   await new Promise(r => setTimeout(r, 50));
 
-  // Build the shareable HTML
   const shareHTML = buildShareHTML();
   fill.style.width = '100%';
   pText.textContent = t('saveDone');
 
-  const blob = new Blob([shareHTML], { type: 'text/html;charset=utf-8' });
+  lastExportedBlob = new Blob([shareHTML], { type: 'text/html;charset=utf-8' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(lastExportedBlob);
   a.download = `house-compare_${new Date().toISOString().slice(0,10)}.html`;
   a.click();
 
-  setTimeout(() => overlay.classList.remove('show'), 1200);
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    showToast(t('toastExportDone'), 'success');
+    // Show share result modal
+    document.getElementById('shareResultModal').classList.add('show');
+  }, 800);
+}
+
+function closeShareResult() {
+  document.getElementById('shareResultModal').classList.remove('show');
+}
+
+function shareViaWhatsApp() {
+  const text = encodeURIComponent(t('shareMessage') + '\n\n' + (lang === 'en'
+    ? 'Please download and open the attached HTML file to view all house options with photos and videos.'
+    : '请下载并打开附件中的 HTML 文件，查看所有房源选项的照片和视频。'));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+function copyShareText() {
+  const text = t('shareMessage') + '\n\n' + (lang === 'en'
+    ? 'Please download and open the attached HTML file to view all house options with photos and videos.'
+    : '请下载并打开附件中的 HTML 文件，查看所有房源选项的照片和视频。');
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(t('toastCopied'), 'success');
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    showToast(t('toastCopied'), 'success');
+  });
 }
 
 function buildShareHTML() {
   const cardsJSON = JSON.stringify(data);
+  const i18nJSON = JSON.stringify(I18N[lang]);
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -1095,14 +1249,37 @@ function buildShareHTML() {
   .area-section:last-child{border-bottom:none}
   .area-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
   .area-images{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px}
-  .area-images .img-slot{aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border)}
+  .area-images .img-slot{aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);cursor:pointer;transition:transform .2s,box-shadow .2s}
+  .area-images .img-slot:hover{transform:scale(1.03);box-shadow:0 4px 16px rgba(0,0,0,0.12)}
   .area-images .img-slot img{width:100%;height:100%;object-fit:cover}
-  .area-desc{width:100%;min-height:36px;border:none;padding:8px 0;font-size:13px;font-family:inherit;color:var(--text);background:transparent;line-height:1.5;pointer-events:none}
+  .area-desc{width:100%;min-height:36px;border:none;padding:8px 0;font-size:13px;font-family:inherit;color:var(--text);background:transparent;line-height:1.5}
   .video-section{padding:20px 24px;border-bottom:1px solid var(--border)}
   .video-section h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
   .video-wrapper{position:relative;border-radius:8px;overflow:hidden;background:var(--accent-light);border:1px solid var(--border);min-height:120px;display:flex;align-items:center;justify-content:center}
   .video-wrapper video,.video-wrapper iframe{width:100%;border-radius:8px;display:block}
-  @media(max-width:768px){.grid{grid-template-columns:1fr}.header{padding:40px 20px 20px}.header h1{font-size:22px}.grid{padding:0 16px 40px}.area-images{grid-template-columns:repeat(3,1fr)}}
+
+  /* Lightbox */
+  .lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;padding:20px}
+  .lightbox-overlay.show{display:flex}
+  .lightbox-overlay img{max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5);cursor:default}
+  .lightbox-close{position:fixed;top:20px;right:24px;z-index:10000;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+  .lightbox-close:hover{background:rgba(255,255,255,0.3)}
+  .lightbox-nav{position:fixed;top:50%;transform:translateY(-50%);z-index:10000;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+  .lightbox-nav:hover{background:rgba(255,255,255,0.3)}
+  .lightbox-prev{left:16px}
+  .lightbox-next{right:16px}
+  .lightbox-counter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.7);font-size:14px;z-index:10000;background:rgba(0,0,0,0.4);padding:6px 16px;border-radius:20px}
+
+  @media(max-width:768px){
+    .grid{grid-template-columns:1fr}
+    .header{padding:40px 20px 20px}
+    .header h1{font-size:22px}
+    .grid{padding:0 16px 40px}
+    .area-images{grid-template-columns:repeat(3,1fr)}
+    .lightbox-nav{width:36px;height:36px;font-size:20px}
+    .lightbox-prev{left:8px}
+    .lightbox-next{right:8px}
+  }
 </style>
 </head>
 <body>
@@ -1111,14 +1288,60 @@ function buildShareHTML() {
   <p>${lang === 'en' ? 'Shared view · Read only' : '分享查看 · 只读模式'}</p>
 </div>
 <div class="grid" id="grid"></div>
+
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox(event)">×</button>
+  <button class="lightbox-nav lightbox-prev" onclick="event.stopPropagation();navLightbox(-1)">‹</button>
+  <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()">
+  <button class="lightbox-nav lightbox-next" onclick="event.stopPropagation();navLightbox(1)">›</button>
+  <div class="lightbox-counter" id="lightboxCounter"></div>
+</div>
+
 <script>
 const CARDS = ${cardsJSON};
 const LANG = "${lang}";
-const T = ${JSON.stringify(I18N[lang])};
-function getAreaIcon(n){return${JSON.stringify({...I18N.zh,...I18N.en})}[n]||'📌'}
+const T = ${i18nJSON};
 const AREA_ICONS={'卧室':'🛏️','客厅':'🛋️','厨房':'🍳','卫生间':'🚿','阳台':'🌿','周边':'🏘️','交通':'🚗','Bedroom':'🛏️','Living Room':'🛋️','Kitchen':'🍳','Bathroom':'🚿','Balcony':'🌿','Surroundings':'🏘️','Transport':'🚗'};
 
+// Lightbox state
+let allImages = [];
+let currentLightboxIdx = 0;
+
+function openLightbox(imgSrc) {
+  currentLightboxIdx = allImages.indexOf(imgSrc);
+  if (currentLightboxIdx === -1) { allImages.push(imgSrc); currentLightboxIdx = allImages.length - 1; }
+  showLightboxImage();
+  document.getElementById('lightbox').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(e) {
+  if (e && e.target !== e.currentTarget && !e.target.classList.contains('lightbox-close')) return;
+  document.getElementById('lightbox').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function navLightbox(dir) {
+  currentLightboxIdx = (currentLightboxIdx + dir + allImages.length) % allImages.length;
+  showLightboxImage();
+}
+
+function showLightboxImage() {
+  document.getElementById('lightboxImg').src = allImages[currentLightboxIdx];
+  document.getElementById('lightboxCounter').textContent = (currentLightboxIdx + 1) + ' / ' + allImages.length;
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('lightbox').classList.contains('show')) return;
+  if (e.key === 'Escape') closeLightbox(e);
+  if (e.key === 'ArrowLeft') navLightbox(-1);
+  if (e.key === 'ArrowRight') navLightbox(1);
+});
+
 function render(){
+  allImages = [];
   const grid=document.getElementById('grid');grid.innerHTML='';
   CARDS.forEach((card,ci)=>{
     let tags='';
@@ -1128,7 +1351,11 @@ function render(){
     for(const[areaName,areaData]of Object.entries(card.areas)){
       let imgsHtml='';
       areaData.images.forEach(src=>{
-        if(src)imgsHtml+='<div class="img-slot"><img src="'+src+'" alt=""></div>';
+        if(src){
+          allImages.push(src);
+          const idx = allImages.length - 1;
+          imgsHtml+='<div class="img-slot" onclick="openLightbox(allImages['+idx+'])"><img src="'+src+'" alt=""></div>';
+        }
       });
       areasHtml+='<div class="area-section"><h3>'+(AREA_ICONS[areaName]||'📌')+' '+areaName+'</h3><div class="area-images">'+imgsHtml+'</div>'+(areaData.desc?'<div class="area-desc">'+areaData.desc+'</div>':'')+'</div>';
     }
@@ -1137,13 +1364,13 @@ function render(){
         ?'<video controls src="'+card.videoSrc+'"></video>'
         :'<iframe src="'+card.videoSrc+'" style="width:100%;aspect-ratio:16/9;border:none;" allowfullscreen></iframe>')
       :'';
-    el=document.createElement('div');el.className='card';
+    const el=document.createElement('div');el.className='card';
     el.innerHTML='<div class="card-header"><h2>'+card.name+'</h2>'+(card.price?'<div class="price">'+card.price+'</div>':'')+'</div>'+(tags?'<div class="card-meta">'+tags+'</div>':'')+(card.notes?'<div class="card-notes">'+card.notes+'</div>':'')+(card.link?'<div class="card-link"><a href="'+card.link+'" target="_blank">🔗 '+(LANG==='en'?'View Link':'查看链接')+'</a></div>':'')+'<button class="expand-btn" onclick="this.classList.toggle(\\'open\\');this.nextElementSibling.classList.toggle(\\'show\\')"><span class="arrow">▼</span> '+(LANG==='en'?'Details':'区域详情')+'</button><div class="card-detail">'+(vidHtml?'<div class="video-section"><h3>🎬 '+(LANG==='en'?'Video Tour':'视频介绍')+'</h3><div class="video-wrapper">'+vidHtml+'</div></div>':'')+areasHtml+'</div>';
     grid.appendChild(el);
   });
 }
 render();
-<\/script>
+<\\/script>
 </body>
 </html>`;
 }
@@ -1177,6 +1404,7 @@ function handleLoadFile(e) {
       });
       render();
       saveToDB();
+      showToast(t('toastCardAdded'), 'success');
     } catch (err) {
       alert(t('fileError'));
     }
@@ -1197,7 +1425,6 @@ async function init() {
   applyLang();
   const loaded = await loadFromDB();
   if (!loaded) {
-    // First time: sample data
     const defaults = lang === 'en' ? DEFAULT_AREAS_EN : DEFAULT_AREAS_ZH;
     data = [
       createCard({ name: lang === 'en' ? 'Sample A' : '示例选项A', price: '¥299', location: lang === 'en' ? 'West Lake' : '西湖区', roomType: lang === 'en' ? '2BR · 4 guests' : '两室一厅 · 可住4人' }),
